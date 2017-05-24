@@ -1,0 +1,22 @@
+---
+title: "neuro_metal_nfl"
+author: "Bindoff, A."
+date: "24 May 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+df <- read_csv("neuro_metal_nfl.csv")
+names(df) <- gsub("\\b\\d+\\b", "", names(df)) # remove numbers
+names(df) <- gsub("  ", "", names(df)) # remove extraneous blanks
+names(df)[1:6] <- c("id", "age", "strain", "region", "sample", "dilution")
+
+```
