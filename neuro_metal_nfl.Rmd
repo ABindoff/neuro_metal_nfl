@@ -19,4 +19,8 @@ names(df) <- gsub("\\b\\d+\\b", "", names(df)) # remove numbers
 names(df) <- gsub("  ", "", names(df)) # remove extraneous blanks
 names(df)[1:6] <- c("id", "age", "strain", "region", "sample", "dilution")
 
+df$id <- as.factor(df$id)
+df$strain <- gsub("[[:punct:]]", "", df$strain)
+df$strain <- as.factor(df$strain)
+df$region <- as.factor(df$region)
 ```
