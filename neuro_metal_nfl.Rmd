@@ -9,18 +9,37 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
+```{r load, message = F, warning = F}
 library(readr)
 library(dplyr)
 library(ggplot2)
-
-df <- read_csv("neuro_metal_nfl.csv")
+library(GGally)
+df <- read_csv("neuro_metal_nfl.csv", trim_ws = T)
 names(df) <- gsub("\\b\\d+\\b", "", names(df)) # remove numbers
 names(df) <- gsub("  ", "", names(df)) # remove extraneous blanks
 names(df)[1:6] <- c("id", "age", "strain", "region", "sample", "dilution")
 
 df$id <- as.factor(df$id)
 df$strain <- gsub("[[:punct:]]", "", df$strain)
+df$strain <- gsub("^WT AP.*", "WT APPPS1", as.character(df$strain))
 df$strain <- as.factor(df$strain)
 df$region <- as.factor(df$region)
+
+df <- select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) # remove metals at or below detection limit
+
+```
+
+```{r exploratory plots}
+
+ggpairs(df[,c(4,6:16)], aes(colour = region, alpha = 0.3))
+
+df0 <- df[,c(2, 6:16)]
+df0$age <- as.factor(df0$age)
+ggpairs(df0, aes(colour = age, alpha = 0.3))
+
+df0 <- df[,c(3, 6:16)]
+df0$age <- as.factor(df0$strain)
+ggpairs(df0, aes(colour = strain, alpha = 0.3))
+
+
 ```
