@@ -4,6 +4,15 @@ author: "Bindoff, A."
 date: "24 May 2017"
 output: html_document
 ---
+
+### Executive Summary
+
+Data from tissue metal analysis provided by Florey Institute were analysed for between group differences in NFL vs WT mice, 5wo vs 22wo, and different brain regions.
+
+Multivariate ANOVA revealed significant differences in region, strain, age, and all two-way interactions. The dependent variables were log(Fe), log(Al), K, and Rb. Further analysis is planned. A statistical appendix is provided below.
+
+### Statistical Appendix
+
 #### Tissue metal analysis
 
 NFL vs WT mice
@@ -64,7 +73,7 @@ ggpairs(df0, aes(colour = strain, alpha = 0.05))
 
 Further distributional assumptions are checked.  Density plots suggest large departures from normality, driven by outliers. Without *a priori* knowledge of these tests, it is not clear whether these outliers are measurement error (in which case they can be discarded), or reflect a normal biological range. A decision was made to retain outliers and investigate their effect on the models later.
 
-```{r histograms}
+```{r histograms, message = F}
 library(reshape2)
 df0 <- melt(df[, c(1, 6:16)])
 ggplot(df0, aes(x = value)) + geom_density() + facet_wrap(~variable, scales = "free", ncol = 3)
@@ -100,13 +109,26 @@ We first log transform Al, K, & Fe values and remove observation 45 from the Al 
 par(mfrow = c(2,2))
 anova(fit1 <- lm(log(Al) ~ region*strain*age, df[-45,]))
 plot(fit1)
+df$logAl <- log(df$Al)
 
 anova(fit4 <- lm(log(K) ~ region*strain*age, df))
 plot(fit4)
 
 anova(fit5 <- lm(log(Fe) ~ region*strain*age, df[-184,]))
 plot(fit5)
+df$logFe <- log(df$Fe)
 
 fit4 <- lm(K ~ region*strain*age, df[-c(167,124),])
 
 ```
+
+Scale all variables to have mean = 0 and sd = 1, then run a MANOVA. Note that group sample sizes are not equal, but R makes the appropriate adjustments. Observations 45 and 184 were excluded, and rows with missing data for all response variables were removed in entirity.
+
+```{r MCMCglmm, message = F echo = T}
+df[,6:18] <- scale(df[,6:18])
+df <- na.omit(df)
+fit1 <- manova(cbind(logAl, logFe, K, Rb) ~ region*strain*age, df[-c(45, 184),])
+
+
+```
+
