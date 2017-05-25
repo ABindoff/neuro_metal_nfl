@@ -124,10 +124,10 @@ fit4 <- lm(K ~ region*strain*age, df[-c(167,124),])
 
 Scale all variables to have mean = 0 and sd = 1, then run a MANOVA. Note that group sample sizes are not equal, but R makes the appropriate adjustments. Observations 45 and 184 were excluded, and rows with missing data for all response variables were removed in entirity.
 
-```{r MCMCglmm, message = F echo = T}
+```{r MCMCglmm, message = F, echo = T}
 df[,6:18] <- scale(df[,6:18])
 df <- na.omit(df)
-fit1 <- manova(cbind(logAl, logFe, K, Rb) ~ region*strain*age, df[-c(45, 184),])
+summary(fit1 <- manova(cbind(logAl, logFe, K, Rb) ~ region*strain*age, df[-c(45, 184),]))
 
 
 ```
