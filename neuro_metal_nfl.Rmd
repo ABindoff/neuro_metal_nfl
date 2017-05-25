@@ -4,9 +4,17 @@ author: "Bindoff, A."
 date: "24 May 2017"
 output: html_document
 ---
+#### Tissue metal analysis
+
+NFL vs WT mice
+5wo v 22wo
+Brain regions
+
+Data are first loaded from a .csv file which was prepared using data returned from Florey Institute (Adlard). The following metals were detected at or below detection limits and are excluded from this analysis: Li, Cr,  Co, Ni, Sr, Ru,  Mo, Cd, Ba & Pt
+
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r load, message = F, warning = F}
@@ -25,21 +33,80 @@ df$strain <- gsub("^WT AP.*", "WT APPPS1", as.character(df$strain))
 df$strain <- as.factor(df$strain)
 df$region <- as.factor(df$region)
 
-df <- select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) # remove metals at or below detection limit
+df <- select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metals at or below detection limit
+    filter(strain == "WT" | strain == "NFL", age == 5 | age == 22)
 
 ```
 
-```{r exploratory plots}
+  
+Correlation matrix plots are produced for an informative visual exploration. From these it can be seen that metals accumulate differentially across brain regions (first plot). NFL strains may accumulate Fe, AL, K, & Rb differently to WT mice (looking at the third plot), so the fourth correlation matrix plot narrows down on these metals. An age x strain interaction appears to be present for Al and Rb.  
 
-ggpairs(df[,c(4,6:16)], aes(colour = region, alpha = 0.3))
+
+```{r exploratory plots, message = F, warning = F}
+
+ggpairs(df[,c(4,6:16)], aes(colour = region, alpha = 0.05))
 
 df0 <- df[,c(2, 6:16)]
 df0$age <- as.factor(df0$age)
-ggpairs(df0, aes(colour = age, alpha = 0.3))
+ggpairs(df0, aes(colour = age, alpha = 0.05))
 
-df0 <- df[,c(3, 6:16)]
-df0$age <- as.factor(df0$strain)
-ggpairs(df0, aes(colour = strain, alpha = 0.3))
+df0 <- df[,c(2, 3, 6:16)]
+df0$age <- as.factor(df0$age)
+ggpairs(df0, aes(colour = strain, alpha = 0.05))
 
+df0 <- df[, c(2, 3, 13, 8, 9, 16)]
+df0$age <- as.factor(df0$age)
+ggpairs(df0, aes(colour = strain, alpha = 0.05))
+
+
+```
+
+
+Further distributional assumptions are checked.  Density plots suggest large departures from normality, driven by outliers. Without *a priori* knowledge of these tests, it is not clear whether these outliers are measurement error (in which case they can be discarded), or reflect a normal biological range. A decision was made to retain outliers and investigate their effect on the models later.
+
+```{r histograms}
+library(reshape2)
+df0 <- melt(df[, c(1, 6:16)])
+ggplot(df0, aes(x = value)) + geom_density() + facet_wrap(~variable, scales = "free", ncol = 3)
+
+```
+
+A series of factorial ANOVAs were fitted that do not account for multiple comparisons (DV) or correlations between DV measures, which we might reasonable expect to be informative. These are simply an exploratory tool used in the absence of *a priori* hypotheses. Inspection of the correlation matrix plots suggests that multivariate approaches are more appropriate.
+
+```{r simple linear models}
+anova(fit1 <- lm(Al ~ region*strain*age, df))
+anova(fit2 <- lm(Rb ~ region*strain*age, df))
+anova(fit3 <- lm(Mg ~ region*strain*age, df))
+anova(fit4 <- lm(K ~ region*strain*age, df))
+anova(fit5 <- lm(Fe ~ region*strain*age, df))
+```
+
+
+Model diagnostic plots to assess fit and modelling assumptions. As expected, there were influential outliers and violated assumptions including normality (points on Q-Q plots departed from the dashed line) and homogeneity of variance (not equal variance across the residuals vs fitted plot).
+
+```{r diagnostic plots}
+par(mfrow = c(2,2))
+plot(fit1)
+plot(fit2)
+plot(fit4)
+plot(fit5)
+
+```
+
+
+We first log transform Al, K, & Fe values and remove observation 45 from the Al model and observation 184 from the Fe model and fit these models and diagnostic plots again. Al and Fe models were greatly improved, but K model suffered from the log transformation so the untransformed model was retained.
+
+```{r remove outliers fit again}
+par(mfrow = c(2,2))
+anova(fit1 <- lm(log(Al) ~ region*strain*age, df[-45,]))
+plot(fit1)
+
+anova(fit4 <- lm(log(K) ~ region*strain*age, df))
+plot(fit4)
+
+anova(fit5 <- lm(log(Fe) ~ region*strain*age, df[-184,]))
+plot(fit5)
+
+fit4 <- lm(K ~ region*strain*age, df[-c(167,124),])
 
 ```
