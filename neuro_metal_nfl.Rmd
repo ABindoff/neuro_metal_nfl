@@ -44,6 +44,7 @@ df$region <- as.factor(df$region)
 
 df <- select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metals at or below detection limit
     filter(strain == "WT" | strain == "NFL", age == 5 | age == 22)
+df <- na.omit(df)
 
 ```
 
@@ -51,31 +52,53 @@ df <- select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metal
 Correlation matrix plots are produced for an informative visual exploration. From these it can be seen that metals accumulate differentially across brain regions (first plot). NFL strains may accumulate Fe, AL, K, & Rb differently to WT mice (looking at the third plot), so the fourth correlation matrix plot narrows down on these metals. An age x strain interaction appears to be present for Al and Rb.  
 
 
-```{r exploratory plots, message = F, warning = F}
+```{r exploratory plots, message = F, warning = F, eval = F}
 
-ggpairs(df[,c(4,6:16)], aes(colour = region, alpha = 0.05))
+ggpairs(df[,c(4,6:16)], aes(colour = region, alpha = 0.05), legend = c(1,1))
 
 df0 <- df[,c(2, 6:16)]
 df0$age <- as.factor(df0$age)
-ggpairs(df0, aes(colour = age, alpha = 0.05))
+ggpairs(df0, aes(colour = age, alpha = 0.05), legend = c(1,1))
 
 df0 <- df[,c(2, 3, 6:16)]
-df0$age <- as.factor(df0$age)
-ggpairs(df0, aes(colour = strain, alpha = 0.05))
+ggpairs(df0, aes(colour = strain, alpha = 0.05), legend = c(1,1))
 
 df0 <- df[, c(2, 3, 13, 8, 9, 16)]
 df0$age <- as.factor(df0$age)
-ggpairs(df0, aes(colour = strain, alpha = 0.05))
+ggpairs(df0, aes(colour = strain, alpha = 0.05), legend = c(1,1))
 
+
+```
+  
+  
+There is a theoretical interest in Fe, Ca, Zn, Al, & RB so plots are produced to investigate these relationships more closely.
+
+```{r exploratory plots, message = F, warning = F, eval = F}
+
+df0 <- df[,c(2, 3, 13, 10, 14, 16, 7)]
+df0$age <- as.factor(df0$age)
+ggpairs(df0, aes(colour = region, alpha = 0.05), legend = c(1,1))
+
+df0 <- df[,c(2, 3, 6:16)]
+ggpairs(df0, aes(colour = strain, alpha = 0.05), legend = c(1,1))
+
+df0 <- df[, c(2, 3, 13, 8, 9, 16)]
+df0$age <- as.factor(df0$age)
+ggpairs(df0, aes(colour = strain, alpha = 0.05), legend = c(1,1))
+
+library(reshape2)
+df0 <- melt(df[,c(1:4, 6:16)], id.vars = c("id", "age", "strain", "region"))
+
+ggplot(df0, aes(x = strain, y = value, colour = region, alpha = 0.05)) + geom_point() + facet_wrap(~variable, scales = "free", ncol = 3)
 
 ```
 
 
-Further distributional assumptions are checked.  Density plots suggest large departures from normality, driven by outliers. Without *a priori* knowledge of these tests, it is not clear whether these outliers are measurement error (in which case they can be discarded), or reflect a normal biological range. A decision was made to retain outliers and investigate their effect on the models later.
+Further distributional assumptions are checked.  Density plots suggest large departures from normality, driven by outliers. Without *a priori* knowledge of these tests, it is not clear whether these outliers are measurement error (in which case they can be discarded), or reflect a normal biological range. A decision was made to retain outliers and investigate their effect on the models later, particularly as it is likely that a log transformation will be applied.
 
 ```{r histograms, message = F}
-library(reshape2)
-df0 <- melt(df[, c(1, 6:16)])
+
+
 ggplot(df0, aes(x = value)) + geom_density() + facet_wrap(~variable, scales = "free", ncol = 3)
 
 ```
@@ -88,6 +111,10 @@ anova(fit2 <- lm(Rb ~ region*strain*age, df))
 anova(fit3 <- lm(Mg ~ region*strain*age, df))
 anova(fit4 <- lm(K ~ region*strain*age, df))
 anova(fit5 <- lm(Fe ~ region*strain*age, df))
+anova(fit6 <- lm(Ca ~ region*strain*age, df))
+anova(fit7 <- lm(Zn ~ region*strain*age, df))
+
+
 ```
 
 
@@ -99,6 +126,8 @@ plot(fit1)
 plot(fit2)
 plot(fit4)
 plot(fit5)
+plot(fit6)
+plot(fit7)
 
 ```
 
@@ -120,15 +149,35 @@ df$logFe <- log(df$Fe)
 
 fit4 <- lm(K ~ region*strain*age, df[-c(167,124),])
 
+anova(fit6 <- lm(log(Ca) ~ region*strain*age, df))
+plot(fit6)
+df$logCa <- log(df$Ca)
+
+anova(fit7 <- lm(log(Zn) ~ region*strain*age, df))
+plot(fit7)
+df$logZn <- log(df$Zn)
+
 ```
 
 Scale all variables to have mean = 0 and sd = 1, then run a MANOVA. Note that group sample sizes are not equal, but R makes the appropriate adjustments. Observations 45 and 184 were excluded, and rows with missing data for all response variables were removed in entirity.
 
-```{r MCMCglmm, message = F, echo = T}
+```{r MANOVA, message = F, echo = T}
 df[,6:18] <- scale(df[,6:18])
-df <- na.omit(df)
-summary(fit1 <- manova(cbind(logAl, logFe, K, Rb) ~ region*strain*age, df[-c(45, 184),]))
+fit1 <- manova(cbind(logAl, logFe, K, Rb, logCa, logZn) ~ region*strain*age, df)
+summary(fit1)
 
+```
+  
+There is no reason to model the three-way interaction, so this term is dropped (this won't change the MANOVA but it will change the Beta coefficients)
+
+```{r MANOVA, message = F, echo = T}
+fit2 <- manova(cbind(logAl, logFe, K, Rb, logCa, logZn) ~ 
+                 region + strain + age +
+                 region:strain +
+                 region:age +
+                 strain:age, df)
+summary(fit2)
+summary.aov(fit2)
 
 ```
 
