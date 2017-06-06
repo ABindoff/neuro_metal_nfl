@@ -7,7 +7,7 @@ output: html_document
 
 ### Executive Summary
 
-Data from tissue metal analysis provided by Florey Institute were analysed for between group differences in NFL vs WT mice, 5wo vs 22wo, and different brain regions.
+Data from tissue metal analysis provided by Florey Institute were analysed for between group differences in NFL vs WT mice, 5mo vs 22mo, and different brain regions.
 
 Multivariate ANOVA revealed significant differences in region, strain, age, and all two-way interactions. The dependent variables were log(Fe), log(Al), K, and Rb. A statistical appendix is provided below.
 
@@ -23,7 +23,7 @@ Multivariate ANOVA revealed significant differences in region, strain, age, and 
 #### Tissue metal analysis
 
 NFL vs WT mice  
-5wo v 22wo  
+5mo v 22mo  
 Brain regions  
 
 Data are first loaded from a .csv file which was prepared using data returned from Florey Institute (Adlard). The following metals were detected at or below detection limits and are excluded from this analysis: Li, Cr,  Co, Ni, Sr, Ru,  Mo, Cd, Ba & Pt.   
