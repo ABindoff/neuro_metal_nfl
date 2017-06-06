@@ -11,6 +11,13 @@ Data from tissue metal analysis provided by Florey Institute were analysed for b
 
 Multivariate ANOVA revealed significant differences in region, strain, age, and all two-way interactions. The dependent variables were log(Fe), log(Al), K, and Rb. A statistical appendix is provided below.
 
+#### To do:
+
+- outlier removal
+- discuss the theoretical model to inform hypothesis testing
+- deal with the multicollinearity (PCA?)
+- if the theoretical model is uncertain, stepdown analysis? LDA?
+
 ### Statistical Appendix
 
 #### Tissue metal analysis
