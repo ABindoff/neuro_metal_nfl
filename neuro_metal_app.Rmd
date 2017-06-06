@@ -1,0 +1,181 @@
+---
+title: "neuro_metal_app"
+author: "Bindoff, A."
+date: "24 May 2017"
+output: html_document
+---
+
+### Executive Summary
+
+Data from tissue metal analysis provided by Florey Institute were analysed for between group differences in APP/PS1 vs WT mice, and different brain regions.
+
+Multivariate ANOVA revealed significant differences in region and strain for Zn and Ca. There were no significant region x strain interactions. A statistical appendix is provided below.
+
+### Statistical Appendix
+
+#### Tissue metal analysis
+
+APP/PS1 vs WT mice  
+Brain regions
+
+Data are first loaded from a .csv file which was prepared using data returned from Florey Institute (Adlard). The following metals were detected at or below detection limits and are excluded from this analysis: Li, Cr,  Co, Ni, Sr, Ru,  Mo, Cd, Ba & Pt.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load, message = F, warning = F}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(GGally)
+df <- read_csv("neuro_metal_nfl.csv", trim_ws = T)
+names(df) <- gsub("\\b\\d+\\b", "", names(df)) # remove numbers
+names(df) <- gsub("  ", "", names(df)) # remove extraneous blanks
+names(df)[1:6] <- c("id", "age", "strain", "region", "sample", "dilution")
+
+df$id <- as.factor(df$id)
+df$age <- as.factor(df$age)
+df$strain <- gsub("[[:punct:]]", "", df$strain)
+df$strain <- gsub("^WT AP.*", "WT_APPPS1", as.character(df$strain))
+df$strain <- as.factor(df$strain)
+df$region <- as.factor(df$region)
+
+df <- select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metals at or below detection limit
+    filter(strain == "WT_APPPS1" | strain == "APPPS1")
+
+```
+
+  
+Correlation matrix plots are produced for an informative visual exploration. From these it can be seen that metals accumulate differentially across brain regions. APP/PS1 strains may accumulate less Zn and Ca than WT mice.  
+
+
+
+```{r exploratory plots, message = F, warning = F, eval = T}
+df$logZn <- log(df$Zn)
+df$logCa <- log(df$Ca)
+ggpairs(df[,c(4,6:9, 11:13, 15:18)], aes(colour = region, alpha = 0.05), legend = c(1,1))
+
+
+
+df0 <- df[,c(3, 6:9, 11:13, 15:18)]
+ggpairs(df0, aes(colour = strain, alpha = 0.05), legend = c(1,1))
+
+
+```
+  
+  
+There is a theoretical interest in Fe, Ca, Zn, Al, & RB so plots are produced to investigate these relationships more closely. The same data are presented in a number of different ways here, the reader may have a preference.
+
+```{r exploratory plots2, message = F, warning = F, eval = T}
+
+
+df0 <- melt(df[,c(1:4, 12,14,10,8,15)], id.vars = c("id", "age", "strain", "region"))
+df0$logvalue <- log(df0$value)
+
+ggplot(df0, aes(x = strain, y = logvalue, colour = region, alpha = 0.05)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free", ncol = 3)
+
+
+ggplot(df0, aes(x = strain, y = logvalue, colour = variable, alpha = 0.05)) +
+  geom_boxplot() +
+  facet_wrap(~region, scales = "free", ncol = 3)
+
+
+ggplot(df0, aes(x = variable, y = logvalue, colour = strain, alpha = 0.05)) +
+  geom_boxplot() +
+  facet_grid(~region, scales = "free")
+
+```
+
+
+Further distributional assumptions are checked.  Density plots suggest large departures from normality and the presence of outliers. Without *a priori* knowledge of these tests, it is not clear whether these outliers are measurement error (in which case they can be discarded), or reflect a normal biological range. A decision was made to retain outliers and investigate their effect on the models later. Density plots have been reproduced with log-transformed values, suggesting that transformation would be appropriate for some measures.
+
+```{r histograms, message = F}
+
+
+ggplot(df0, aes(x = value)) +
+  geom_density() +
+  facet_wrap(~variable, scales = "free", ncol = 3)
+
+ggplot(df0, aes(x = logvalue)) +
+  geom_density() +
+  facet_wrap(~variable, scales = "free", ncol = 3)
+
+
+```
+
+A series of factorial ANOVAs were fitted and diagnostic plots produced as part of assumption checking.
+
+```{r simple linear models}
+
+par(mfrow = c(2,2))
+anova(fit1 <- lm(Al ~ region*strain, df))
+plot(fit1)
+anova(fit2 <- lm(Rb ~ region*strain, df))
+plot(fit2)
+anova(fit3 <- lm(Se ~ region*strain, df))
+plot(fit3)
+anova(fit4 <- lm(K ~ region*strain, df))
+plot(fit4)
+anova(fit5 <- lm(Fe ~ region*strain, df))
+plot(fit5)
+anova(fit6 <- lm(Ca ~ region*strain, df))
+plot(fit6)
+anova(fit7 <- lm(Zn ~ region*strain, df))
+plot(fit7)
+
+
+```
+
+
+
+We first log transform Al, Fe, Ca, and Zn measures and check diagnostic plots.
+
+```{r remove outliers fit again}
+par(mfrow = c(2,2))
+anova(fit1 <- lm(log(Al) ~ region*strain, df))
+plot(fit1)
+df$logAl <- log(df$Al)
+
+anova(fit4 <- lm(log(K) ~ region*strain, df))
+plot(fit4)
+
+anova(fit5 <- lm(log(Fe) ~ region*strain, df[-79,]))
+plot(fit5)
+df$logFe <- log(df$Fe)
+
+anova(fit6 <- lm(log(Ca) ~ region*strain, df))
+plot(fit6)
+
+anova(fit7 <- lm(log(Zn) ~ region*strain, df))
+plot(fit7)
+
+
+df$logRb <- log(df$Rb)
+
+```
+
+Scale all variables to have mean = 0 and sd = 1, then run a MANOVA. Note that group sample sizes are not equal, but R makes the appropriate adjustments. logCa and logZn were retained in the model fitting process, as other measures only showed regional differences (not related to strain).
+
+
+```{r MANOVA, message = F, echo = T}
+df[,6:20] <- scale(df[,6:20])
+fit1 <- manova(cbind(logCa, logZn) ~ region*strain, df)
+summary(fit1)
+summary.aov(fit1)
+
+```
+  
+    
+There were no significant region x strain interactions, so the interaction term was dropped.
+
+```{r MANOVA2, message = F, echo = T}
+fit1 <- manova(cbind(logCa, logZn) ~ region  + strain, df)
+summary(fit1)
+summary.aov(fit1)
+
+```
