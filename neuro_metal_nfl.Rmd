@@ -15,6 +15,7 @@ Multivariate ANOVA revealed significant differences in region, strain, age, and 
 
 - outlier removal
 - discuss the theoretical model to inform hypothesis testing
+- as K is ubiquitous in cells, and correlated so strongly with other elements, should we use K as a covariate? i.e more cells - more K - more metal but not necessarily more Fe per cell (say)
 - deal with the multicollinearity (PCA?)
 - if the theoretical model is uncertain, stepdown analysis? LDA?
 
@@ -135,7 +136,7 @@ ggplot(df0, aes(x = logvalue)) +
 
 ```
 
-A series of factorial ANOVAs were fitted, and diagnostic plots for assumption checking. As expected, there were influential outliers and violated assumptions including normality (points on Q-Q plots departed from the dashed line) and homogeneity of variance (not equal variance across the residuals vs fitted plot).
+A series of factorial ANOVAs were fitted, with diagnostic plots for assumption checking. As expected, there were influential outliers and violated assumptions including normality (points on Q-Q plots departed from the dashed line) and homogeneity of variance (not equal variance across the residuals vs fitted plot). **No statistical inference should be made from these as observations are *not* independent** (i.e there are 5 observations from each mouse, and depending on which effects you're looking at - this matters)
 
 ```{r simple linear models}
 par(mfrow = c(2,2))
@@ -158,7 +159,7 @@ plot(fit7)
 
 
 
-We first log transform Al, K, & Fe values and remove observation 45 from the Al model and observation 184 from the Fe model and fit these models and diagnostic plots again. Al and Fe models were greatly improved, but K model suffered from the log transformation so the untransformed model was retained.
+We first log transform Al, K, & Fe values and remove observation 45 from the Al model and observation 184 from the Fe model and fit these models and diagnostic plots again. Al and Fe models were greatly improved, but K model suffered from the log transformation so the untransformed measure was retained.
 
 ```{r remove outliers fit again}
 par(mfrow = c(2,2))
@@ -206,4 +207,43 @@ summary(fit2)
 summary.aov(fit2)
 
 ```
+
+  
+We are primarily interested in metals inside cells, and K is ubiquitous in cells, so it may provide a proxy for cell density in tissue samples. The correlation matrix plots show a strong correlation between K and Fe, K and Zn, and a very strong correlation between K and Rb. Conditioning on region, some of these correlations disappear (not shown explicitly). We know that K and Rb are exchangeable, and that the biological function of Rb is unknown (see introduction to Roberts et al. 2016 "Rubidium and potassium levels are altered in Alzheimer’s disease brain and blood but not in cerebrospinal fluid" for an overview).  This suggests that higher levels of Fe or Zn may be explained by a higher cell density in the tissue samples, particularly looking at different brain regions where we might expect differing cell densities.  
+
+
+
+```{r correlationmatrixK}
+# fit2 <- manova(cbind(logAl, logFe, K, Rb, logZn) ~ 
+df0 <- df[, c("region", "logAl", "logFe", "K", "Rb", "logZn")]
+ggpairs(df0, aes(colour = region, alpha = 0.05), legend = c(1,1))
+
+
+```
+
+  
+There are differences in K and Rb between NFL and wt mice, so we explore these differences more closely (looking at regions independently).
+
+
+```{r by_region}
+j_region <- c("Brain stem", "Cerebellum", "Cortex", "Hippocampus", "Olfactory bulb", "Siatic nerve")
+
+lapply(j_region, function(j) t.test(K ~ strain, data = filter(df, region == j)))
+lapply(j_region, function(j) t.test(Rb ~ strain, data = filter(df, region == j)))
+
+
+```
+
+
+After a Bonferroni correction ($\alpha = .0083$), no significant difference in K between strains was observed, but differences for Rb were observed. For the sake of being thorough, a PCA was fitted to reduce K and Rb to a single measure. After Bonferroni correction, no significant differences between NFL and wt mice were found. For the sake of simplicity, K (but not Rb) might be a suitable proxy for cell density in tissue samples if required.
+
+```{r pca}
+eig <- eigen(cor(df[, c("K", "Rb")]))$values
+df$eig <- eig[1L]*scale(df$K) + eig[2L]*scale(df$Rb)
+lapply(j_region, function(j) t.test(eig ~ strain, data = filter(df, region == j)))
+
+```
+
+
+  
 

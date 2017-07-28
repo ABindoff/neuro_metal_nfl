@@ -1,0 +1,138 @@
+---
+title: "CU, Zn, Fe in brains of NFL knock-out mice"
+author: "Bindoff, A."
+date: "27 July 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r load, message = F, warning = F}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(sjPlot)
+library(plotmo)
+library(lme4)
+library(MuMIn)
+library(lsr)
+library(multcomp)
+
+mciMean <- function(x){
+  return(setNames(c(round(mean(x), 3), round(ciMean(x), 3)), c("mean", "lwr", "upr")))
+}
+
+
+df <- read_csv("neuro_metal_nfl.csv", trim_ws = T)
+names(df) <- gsub("\\b\\d+\\b", "", names(df)) # remove numbers
+names(df) <- gsub("  ", "", names(df)) # remove extraneous blanks
+names(df)[1:6] <- c("id", "age", "strain", "region", "sample", "dilution")
+df$region[df$region == "Siatic nerve"] <- "Sciatic nerve"
+df$id <- as.factor(df$id)
+df$age <- as.factor(df$age)
+df$strain <- gsub("[[:punct:]]", "", df$strain)
+df$strain <- gsub("^WT AP.*", "WT_APPPS1", as.character(df$strain))
+df$strain <- as.factor(df$strain)
+df$region <- as.factor(df$region)
+
+df <- dplyr::select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metals at or below detection limit
+    filter(strain == "WT" | strain == "NFL", age == 5 | age == 22)
+df$strain <- factor(df$strain, levels = c("WT", "NFL"))
+df$age <- factor(df$age, levels = c(5, 22))
+df <- na.omit(df)
+
+```
+
+```{r transformation, message = F, warning = F, eval = T}
+
+
+df$logAl <- log(df$Al)
+df$logFe <- log(df$Fe)
+df$logCa <- log(df$Ca)
+df$logZn <- log(df$Zn)
+df$logCu <- log(df$Cu)
+df[,6:ncol(df)] <- scale(df[,6:ncol(df)])
+
+```
+
+
+```{r exploratory plots2, message = F, warning = F, eval = T}
+
+
+df0 <- melt(df[,c(1:4, 18, 20, 21)], id.vars = c("id", "age", "strain", "region"))
+ggplot(df0, aes(x = strain, y = value, colour = age)) +
+   geom_violin(draw_quantiles = c(0.025, 0.5, 0.975)) +
+   facet_grid(~variable, scales = "free") +
+   theme(panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black"))
+
+df0 <- df
+```
+
+```{r model_selection}
+df <- filter(df, region %in% c("Hippocampus", "Sciatic nerve"))
+fit <- lm(logFe ~ region*strain*age, df, na.action = "na.fail")
+# anova(fit)
+d <- dredge(fit)
+d %>% filter(delta < 4)
+
+
+```
+
+```{r}
+df <- filter(df, region %in% c("Hippocampus")) %>% dplyr::select(logCu, strain, age)
+
+
+fit <- lm(logCu ~ strain*age, df)
+anova(fit)
+k <- aggregate(logCu ~ age*strain, df, mciMean)
+print(k)
+j <- data.frame(age = k$age,
+                strain = k$strain,
+                mean = k$logCu[,1],
+                ci = k$logCu[,3]-k$logCu[,1])
+
+
+gp <- ggplot(j, aes(x = age, y= mean, colour = strain, group = strain))
+gp + geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
+     geom_point(position = position_dodge(width = 0.1), size=3) + 
+     geom_errorbar(position = position_dodge(width = 0.1),
+                   aes(ymax=mean+ci, ymin=mean-ci), width=.1)
+```
+```{r}
+
+tmp <- expand.grid(age = unique(df$age), strain = unique(df$strain))
+X <- model.matrix(~ strain*age, data = tmp)
+g <- glht(fit, linfct = X)
+Tukey <- contrMat(table(df$strain), "Tukey")
+K1 <- cbind(Tukey, matrix(0, nrow = nrow(Tukey), ncol = ncol(Tukey)))
+rownames(K1) <- paste(levels(df$age)[1], rownames(K1), sep = ":")
+K2 <- cbind(matrix(0, nrow = nrow(Tukey), ncol = ncol(Tukey)), Tukey)
+rownames(K2) <- paste(levels(df$age)[2], rownames(K2), sep = ":")
+K <- rbind(K1, K2)
+colnames(K) <- c(colnames(Tukey), colnames(Tukey))
+summary(glht(fit, linfct = K %*% X))
+
+```
+
+```{r}
+fit <- lm(logZn ~ region + strain + age +
+                 region:strain +
+                 region:age +
+                 strain:age, df)
+anova(fit)
+plotmo(fit, method = "partdep")
+```
+
+```{r}
+fit <- lm(logFe ~ region + strain + age +
+                 region:strain +
+                 region:age +
+                 strain:age, df)
+anova(fit)
+plotmo(fit, method = "partdep")
+```
