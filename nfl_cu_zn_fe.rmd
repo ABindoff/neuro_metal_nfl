@@ -19,8 +19,9 @@ library(plotmo)
 library(lme4)
 library(MuMIn)
 library(lsr)
-library(multcomp)
-
+library(latex2exp)
+library(lsmeans)
+library(lmerTest)
 mciMean <- function(x){
   return(setNames(c(round(mean(x), 3), round(ciMean(x), 3)), c("mean", "lwr", "upr")))
 }
@@ -54,10 +55,26 @@ df$logFe <- log(df$Fe)
 df$logCa <- log(df$Ca)
 df$logZn <- log(df$Zn)
 df$logCu <- log(df$Cu)
-df[,6:ncol(df)] <- scale(df[,6:ncol(df)])
+# df[,6:ncol(df)] <- scale(df[,6:ncol(df)])
 
 ```
+  
+## Summary of findings
 
+Tissue samples were taken from multiple sites (coded as `region`) in mouse brains as explained elsewhere. To account for individual effects and dependency between observations, a mixed effects model with mouse `id` fitted as a random intercept was identified by robust model selection procedures.
+
+From this model specification, confidence intervals which take into account model uncertainty were computed. These results are presented in plots and tables, along with the results of ANOVA tests in the statistical appendix below.
+
+There were significant `strain`:`age` interactions for measures of Zn & Fe, and significant `region`:`strain` interactions and main effect of `strain` for measures of Zn, Fe, & Cu. We expect main effects of `region` and `age` (and their interactions), and these are included for statistical adjustment only.
+
+It is suggested that the reader review the interaction plots and ANOVA tables, ignoring the remaining output which is presented for completeness and future reference.
+
+
+## Statistical appendix
+
+### Exploratory plot
+
+Violin plots show the distribution of each metal by age and strain. Bars are placed at mean and 95% CIs.
 
 ```{r exploratory plots2, message = F, warning = F, eval = T}
 
@@ -73,66 +90,172 @@ ggplot(df0, aes(x = strain, y = value, colour = age)) +
 df0 <- df
 ```
 
-```{r model_selection}
-df <- filter(df, region %in% c("Hippocampus", "Sciatic nerve"))
-fit <- lm(logFe ~ region*strain*age, df, na.action = "na.fail")
-# anova(fit)
-d <- dredge(fit)
-d %>% filter(delta < 4)
 
+### Mixed effects model
+
+Tissue samples were taken from multiple brain and CNS sites for each animal, so in order to account for this dependency, mixed effects models were fitted using `logZn` as the response variable. A number of models were fitted investigating fixed and random effects. A final model was selected by likelihood ratio test and $\Delta AIC$ -  
+
+\[\hat{y} = region + age + strain + region*strain + strain*age + region*age + (1|id)\]
+
+
+```{r, echo = T}
+df <- dplyr::select(df0, c(id, age, strain, region, logFe, logZn, logCu))
+m_1 <- lmer(logZn ~ strain*age + (1|region) + (1|id), df, REML = F)
+m_2 <- lmer(logZn ~ region + strain*age + (1|id), df, REML = F )
+m_3 <- lmer(logZn ~ region*age + strain*age + (1|id), df, REML = F)
+m_4 <- lmer(logZn ~ region*age*strain + (1|id), df, REML = F)
+m_5 <- lmer(logZn ~ region*strain + strain*age + region*age + (1|id), df, REML = F)
+m_6 <- lmer(logZn ~ region*strain + strain*age + (1|id), df, REML = F)
+
+
+anova(m_3, m_4, m_5, m_6)
 
 ```
 
+
 ```{r}
-df <- filter(df, region %in% c("Hippocampus")) %>% dplyr::select(logCu, strain, age)
+fit.cu <- lmer(logCu ~ region*strain + strain*age + region*age + (1|id), df)
+fit.zn <- lmer(logZn ~ region*strain + strain*age + region*age + (1|id), df)
+fit.fe <- lmer(logFe ~ region*strain + strain*age + region*age + (1|id), df)
+```
+  
+```{r bootstrapping, warning = F, messsage = F}
+set.seed(123)
+nsim <- 1000
+### logZn
 
+df.zn <- df
+bootfit <- bootMer(fit.zn, FUN=function(x) predict(x, df, re.form = NA),
+                   nsim = nsim,
+                   parallel = "multicore",
+                   ncpus = 3L)
 
-fit <- lm(logCu ~ strain*age, df)
-anova(fit)
-k <- aggregate(logCu ~ age*strain, df, mciMean)
-print(k)
-j <- data.frame(age = k$age,
-                strain = k$strain,
-                mean = k$logCu[,1],
-                ci = k$logCu[,3]-k$logCu[,1])
+df.zn$lwr <- apply(bootfit$t, 2, quantile, 0.025)
+df.zn$upr <- apply(bootfit$t, 2, quantile, 0.975)
+df.zn$fit <- apply(bootfit$t, 2, mean)
 
-
-gp <- ggplot(j, aes(x = age, y= mean, colour = strain, group = strain))
-gp + geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
+zn <- ggplot(df.zn, aes(x = age, y= fit, colour = strain, group = strain)) +
+  geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
      geom_point(position = position_dodge(width = 0.1), size=3) + 
      geom_errorbar(position = position_dodge(width = 0.1),
-                   aes(ymax=mean+ci, ymin=mean-ci), width=.1)
+                   aes(ymax=upr, ymin=lwr), width=.1) +
+  facet_grid(~ region) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) +
+  labs(y = TeX("logZn ($\\mu$g/g)"), x = "age (months)")
+
+### logCu
+df.cu <- df
+bootfit <- bootMer(fit.cu, FUN=function(x) predict(x, df, re.form = NA),
+                   nsim = nsim,
+                   parallel = "multicore",
+                   ncpus = 3L)
+
+df.cu$lwr <- apply(bootfit$t, 2, quantile, 0.025)
+df.cu$upr <- apply(bootfit$t, 2, quantile, 0.975)
+df.cu$fit <- apply(bootfit$t, 2, mean)
+
+cu <- ggplot(df.cu, aes(x = age, y= fit, colour = strain, group = strain)) +
+  geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
+     geom_point(position = position_dodge(width = 0.1), size=3) + 
+     geom_errorbar(position = position_dodge(width = 0.1),
+                   aes(ymax=upr, ymin=lwr), width=.1) +
+  facet_grid(~ region) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) +
+  labs(y = TeX("logCu ($\\mu$g/g)"), x = "age (months)")
+
+
+### logFe
+df.fe <- df
+bootfit <- bootMer(fit.fe, FUN=function(x) predict(x, df, re.form = NA),
+                   nsim = nsim,
+                   parallel = "multicore",
+                   ncpus = 3L)
+
+
+df.fe$lwr <- apply(bootfit$t, 2, quantile, 0.025)
+df.fe$upr <- apply(bootfit$t, 2, quantile, 0.975)
+df.fe$fit <- apply(bootfit$t, 2, mean)
+
+fe <- ggplot(df.fe, aes(x = age, y= fit, colour = strain, group = strain)) +
+  geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
+     geom_point(position = position_dodge(width = 0.1), size=3) + 
+     geom_errorbar(position = position_dodge(width = 0.1),
+                   aes(ymax=upr, ymin=lwr), width=.1) +
+  facet_grid(~ region) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) +
+  labs(y = TeX("logFe ($\\mu$g/g)"), x = "age (months)")
+
+# raw estimates (not bootstrapped)
+k <- aggregate(logFe ~ region*strain + strain*age + region*age, df, mciMean)
+df.k <- cbind(k[,1:3], k$logFe)
+
+fe.raw <- ggplot(df.k, aes(x = age, y = mean, colour = strain, group = strain)) +
+  geom_line(position =  position_dodge(width = 0.1), aes(linetype = strain), size = 0.6) +
+  geom_point(position = position_dodge(width = 0.1), size = 3) +
+  geom_errorbar(position = position_dodge(width = 0.1),
+                   aes(ymax=lwr, ymin=upr), width=.1) +
+  facet_grid(~ region) + 
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black")) +
+  labs(y = TeX("RAW logFe ($\\mu$g/g)"), x = "age (months)")
+#lsmeans(fit.zn, pairwise ~ age | strain)
+#lsmeans(fit.zn, pairwise ~ strain | age)
+
+
 ```
+
+### Interaction plots
+
+After fitting the mixed effects models, 95% confidence intervals were obtained by bootstrapping using `r nsim` iterations. This is a robust (but computationally expensive) method of obtaining confidence intervals accounting for the conditional modes of the random effects (Bates, Machler, Bolker, & Walker (2014) https://arxiv.org/pdf/1406.5823.pdf ,see p 27), and the mild heterogeneity of residuals that was observed.
+
+```{r}
+cu
+fe
+fe.raw
+zn
+
+```
+
+
+### Confidence intervals (obtained by bootstrapping)
+
+Tables of 95% CIs are produced and the results of ANOVA. **Our interest lies with the main effect of `strain` and the `strain:age` interaction**, we expect `region` and `age` differences which are of no interest in our experiment and are included for statistical adjustment. There may be some interest in the `region:strain` interaction, as strain was experimentally controlled.
+
+Zn (log$\mu g/gm$)
 ```{r}
 
-tmp <- expand.grid(age = unique(df$age), strain = unique(df$strain))
-X <- model.matrix(~ strain*age, data = tmp)
-g <- glht(fit, linfct = X)
-Tukey <- contrMat(table(df$strain), "Tukey")
-K1 <- cbind(Tukey, matrix(0, nrow = nrow(Tukey), ncol = ncol(Tukey)))
-rownames(K1) <- paste(levels(df$age)[1], rownames(K1), sep = ":")
-K2 <- cbind(matrix(0, nrow = nrow(Tukey), ncol = ncol(Tukey)), Tukey)
-rownames(K2) <- paste(levels(df$age)[2], rownames(K2), sep = ":")
-K <- rbind(K1, K2)
-colnames(K) <- c(colnames(Tukey), colnames(Tukey))
-summary(glht(fit, linfct = K %*% X))
 
+k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.zn, FUN = mean)
+k[,4:6] <- round(k[,4:6], 2)      
+print(k)
+anova(fit.zn)
 ```
-
+  
+Cu (log$\mu g/gm$)
 ```{r}
-fit <- lm(logZn ~ region + strain + age +
-                 region:strain +
-                 region:age +
-                 strain:age, df)
-anova(fit)
-plotmo(fit, method = "partdep")
+k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.cu, FUN = mean)
+k[,4:6] <- round(k[,4:6], 2)      
+print(k)
+anova(fit.cu)
 ```
 
+  
+Fe (log$\mu g/gm$)
 ```{r}
-fit <- lm(logFe ~ region + strain + age +
-                 region:strain +
-                 region:age +
-                 strain:age, df)
-anova(fit)
-plotmo(fit, method = "partdep")
+k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.fe, FUN = mean)
+k[,4:6] <- round(k[,4:6], 2)      
+print(k)
+anova(fit.fe)
 ```
+
