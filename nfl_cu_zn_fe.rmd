@@ -92,7 +92,7 @@ df0 <- df
 
 ### Random effect of individual mouse
 
-Line plots show the effect of individual mouse. Some animals fairly consistently have higher levels of Zn or Fe, some have consistently lower. Because we cannot control the effect of individual experimentally, we call it a "random effect" and model it as a distribution, rather than a fixed effect (think of the $\beta$ coefficient as being a probability density function rather than a number). This reduces the unexplained variance in the model, resulting in a more powerful model.
+Line plots show the effect of individual mouse. Some animals fairly consistently have higher levels of Zn or Fe, some have consistently lower. Because we cannot control the effect of individual experimentally, we call it a "random effect" and model it as a distribution, rather than a fixed effect. This reduces the unexplained variance in the model, resulting in a more powerful model.
 
 ```{r}
 cbPalette <- rep(c("#E69F00", "#0072B2", "#D55E00", "#56B4E9", "#009E73", "#F0E442", "#CC79A7"),
@@ -127,7 +127,7 @@ ggplot(df, aes(x = region, y = logFe, group = factor(id))) +
 ```
 ### Mixed effects model
 
-Tissue samples were taken from multiple brain and CNS sites for each animal, so in order to account for this dependency, mixed effects models were fitted using `logZn` as the response variable. A number of models were fitted investigating fixed and random effects. A final model was selected by likelihood ratio test and $\Delta AIC$ -  
+Tissue samples were taken from multiple brain and CNS sites for each animal, so in order to account for this non-independence, mixed effects models were fitted using `logZn` as the response variable. A number of models were fitted investigating fixed and random effects. A final model was selected by likelihood ratio test and $\Delta AIC$ -  
 
 \[\hat{y} = region + age + strain + region*strain + strain*age + region*age + (1|id)\]
 
@@ -269,7 +269,7 @@ fe
 
 ### Confidence intervals (obtained by bootstrapping)
 
-Tables of 95% CIs are produced and the results of ANOVA. **Our interest lies with the main effect of `strain` and the `strain:age` interaction**, we expect `region` and `age` differences which are of no interest in our experiment and are included for statistical adjustment. There may be some interest in the `region:strain` interaction, as strain was experimentally controlled.
+Tables of 95% CIs are produced and the results of ANOVA. **Our interest lies with the `strain` interactions**, we expect `region` and `age` differences which are of no interest in our experiment and are included for statistical adjustment.
 
 Zn (log$\mu g/gm$)
 
