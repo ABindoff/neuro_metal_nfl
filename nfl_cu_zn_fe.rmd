@@ -90,7 +90,41 @@ ggplot(df0, aes(x = strain, y = value, colour = age)) +
 df0 <- df
 ```
 
+### Random effect of individual mouse
 
+Line plots show the effect of individual mouse. Some animals fairly consistently have higher levels of Zn or Fe, some have consistently lower. Because we cannot control the effect of individual experimentally, we call it a "random effect" and model it as a distribution, rather than a fixed effect (think of the $\beta$ coefficient as being a probability density function rather than a number). This reduces the unexplained variance in the model, resulting in a more powerful model.
+
+```{r}
+cbPalette <- rep(c("#E69F00", "#0072B2", "#D55E00", "#56B4E9", "#009E73", "#F0E442", "#CC79A7"),
+                 20)
+
+ggplot(df, aes(x = region, y = logZn, group = factor(id))) +
+  geom_line() +
+  aes(colour = factor(id)) +
+  scale_colour_manual(values=cbPalette) + 
+  facet_grid(~ age + strain) +
+  guides(colour = FALSE) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.text.x = element_text(angle = 90),
+        axis.line = element_line(colour = "black")) +
+  labs(y = TeX("logZn ($\\mu$g/g)"), x = "region")
+
+ggplot(df, aes(x = region, y = logFe, group = factor(id))) +
+  geom_line() +
+  aes(colour = factor(id)) +
+  scale_colour_manual(values=cbPalette) + 
+  facet_grid(~ age + strain) +
+  guides(colour = FALSE) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.text.x = element_text(angle = 90),
+        axis.line = element_line(colour = "black")) +
+  labs(y = TeX("logFe ($\\mu$g/g)"), x = "region")
+
+```
 ### Mixed effects model
 
 Tissue samples were taken from multiple brain and CNS sites for each animal, so in order to account for this dependency, mixed effects models were fitted using `logZn` as the response variable. A number of models were fitted investigating fixed and random effects. A final model was selected by likelihood ratio test and $\Delta AIC$ -  
@@ -124,15 +158,20 @@ set.seed(123)
 nsim <- 1000
 ### logZn
 
-df.zn <- df
+# df.zn <- data.frame(region = factor(rep(levels(df$region), 4)),
+#                     strain = factor(c(rep("wt", 6), rep("tg", 6))),
+#                     age = factor(c(rep(5, 12), rep(22, 12))))
 bootfit <- bootMer(fit.zn, FUN=function(x) predict(x, df, re.form = NA),
                    nsim = nsim,
                    parallel = "multicore",
                    ncpus = 3L)
-
+df.zn <- df
 df.zn$lwr <- apply(bootfit$t, 2, quantile, 0.025)
 df.zn$upr <- apply(bootfit$t, 2, quantile, 0.975)
 df.zn$fit <- apply(bootfit$t, 2, mean)
+
+# ci <- confint(fit.zn, method = "boot")
+# df.zn$lwr 
 
 zn <- ggplot(df.zn, aes(x = age, y= fit, colour = strain, group = strain)) +
   geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
@@ -194,11 +233,13 @@ fe <- ggplot(df.fe, aes(x = age, y= fit, colour = strain, group = strain)) +
         axis.line = element_line(colour = "black")) +
   labs(y = TeX("logFe ($\\mu$g/g)"), x = "age (months)")
 
-# raw estimates (not bootstrapped)
-k <- aggregate(logFe ~ region*strain + strain*age + region*age, df, mciMean)
-df.k <- cbind(k[,1:3], k$logFe)
+# fixed effects estimates (not bootstrapped)
 
-fe.raw <- ggplot(df.k, aes(x = age, y = mean, colour = strain, group = strain)) +
+k <- aggregate(logFe ~ region*strain + strain*age + region*age, df, mean)
+m <- lm(logFe ~ region*strain + strain*age + region*age, df)
+df.k <- cbind(k[,1:3], predict(m, k, interval = "confidence"))
+
+fe.raw <- ggplot(df.k, aes(x = age, y = fit, colour = strain, group = strain)) +
   geom_line(position =  position_dodge(width = 0.1), aes(linetype = strain), size = 0.6) +
   geom_point(position = position_dodge(width = 0.1), size = 3) +
   geom_errorbar(position = position_dodge(width = 0.1),
@@ -208,7 +249,7 @@ fe.raw <- ggplot(df.k, aes(x = age, y = mean, colour = strain, group = strain)) 
         panel.grid.minor = element_blank(),
         panel.background = element_blank(), 
         axis.line = element_line(colour = "black")) +
-  labs(y = TeX("RAW logFe ($\\mu$g/g)"), x = "age (months)")
+  labs(y = TeX("FIXED EFFECTS ONLY MODEL logFe ($\\mu$g/g)"), x = "age (months)")
 #lsmeans(fit.zn, pairwise ~ age | strain)
 #lsmeans(fit.zn, pairwise ~ strain | age)
 
@@ -217,14 +258,12 @@ fe.raw <- ggplot(df.k, aes(x = age, y = mean, colour = strain, group = strain)) 
 
 ### Interaction plots
 
-After fitting the mixed effects models, 95% confidence intervals were obtained by bootstrapping using `r nsim` iterations. This is a robust (but computationally expensive) method of obtaining confidence intervals accounting for the conditional modes of the random effects (Bates, Machler, Bolker, & Walker (2014) https://arxiv.org/pdf/1406.5823.pdf ,see p 27), and the mild heterogeneity of residuals that was observed.
+After fitting the mixed effects models, 95% confidence intervals were obtained by bootstrapping using `r nsim` iterations. This is a robust (but computationally expensive) method of obtaining confidence intervals which take into account the conditional modes of the random effects (Bates, Machler, Bolker, & Walker (2014) https://arxiv.org/pdf/1406.5823.pdf ,see p 27), and the mild heterogeneity of residuals that was observed. These confidence intervals take into account all the sources of variability in the data that we *can* take into account, without making assumptions about the distribution of the residuals based on the mean and standard deviation.
 
 ```{r}
 cu
-fe
-fe.raw
 zn
-
+fe
 ```
 
 
@@ -233,6 +272,7 @@ zn
 Tables of 95% CIs are produced and the results of ANOVA. **Our interest lies with the main effect of `strain` and the `strain:age` interaction**, we expect `region` and `age` differences which are of no interest in our experiment and are included for statistical adjustment. There may be some interest in the `region:strain` interaction, as strain was experimentally controlled.
 
 Zn (log$\mu g/gm$)
+
 ```{r}
 
 
@@ -243,6 +283,7 @@ anova(fit.zn)
 ```
   
 Cu (log$\mu g/gm$)
+
 ```{r}
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.cu, FUN = mean)
 k[,4:6] <- round(k[,4:6], 2)      
@@ -252,6 +293,7 @@ anova(fit.cu)
 
   
 Fe (log$\mu g/gm$)
+
 ```{r}
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.fe, FUN = mean)
 k[,4:6] <- round(k[,4:6], 2)      
