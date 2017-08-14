@@ -1,12 +1,12 @@
 ---
 title: "CU, Zn, Fe in brains of NFL knock-out mice"
 author: "Bindoff, A."
-date: "27 July 2017"
+date: "10th August 2017"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning = F)
 ```
 
 ```{r load, message = F, warning = F}
@@ -14,11 +14,9 @@ library(readr)
 library(dplyr)
 library(ggplot2)
 library(reshape2)
-library(sjPlot)
-library(plotmo)
+library(car)
 library(lme4)
 library(MuMIn)
-library(lsr)
 library(latex2exp)
 library(lsmeans)
 library(lmerTest)
@@ -40,7 +38,7 @@ df$strain <- as.factor(df$strain)
 df$region <- as.factor(df$region)
 
 df <- dplyr::select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metals at or below detection limit
-    filter(strain == "WT" | strain == "NFL", age == 5 | age == 22)
+    filter(strain == "WT" | strain == "NFL", age == 5 | age == 22) %>% filter(id != 15) # nfl id == 15 was 19mo
 df$strain <- factor(df$strain, levels = c("WT", "NFL"))
 df$age <- factor(df$age, levels = c(5, 22))
 df <- na.omit(df)
@@ -48,13 +46,21 @@ df <- na.omit(df)
 ```
 
 ```{r transformation, message = F, warning = F, eval = T}
+### outlier checking
+# ii <- which(df$id %in% c(234, 162382))
+# df$Label[ii] <- as.character(df$id[ii])
+# ggplot(df, aes(x = region, y = Cu, colour = id, label = Label)) +
+#   geom_point() + geom_text(hjust = -.1, vjust = .8) +guides(colour = F)
 
 
+
+df$Cu[df$Cu >= 320] <- NA 
 df$logAl <- log(df$Al)
 df$logFe <- log(df$Fe)
 df$logCa <- log(df$Ca)
 df$logZn <- log(df$Zn)
 df$logCu <- log(df$Cu)
+# df$logCu[df$logCu > 5.76] <- NA
 # df[,6:ncol(df)] <- scale(df[,6:ncol(df)])
 
 ```
@@ -72,9 +78,20 @@ It is suggested that the reader review the interaction plots and ANOVA tables, i
 
 ## Statistical appendix
 
+### Sample characteristics
+
+Due to _____ some data for individual mice were missing within regions. The number of mice observed for each condition is cross-tabulated below.
+
+```{r}
+xtabs(~strain + age + region, df)
+
+```
+
 ### Exploratory plot
 
 Violin plots show the distribution of each metal by age and strain. Bars are placed at mean and 95% CIs.
+
+A single extreme value was removed, being the logCu measurement for mouse id = 234 in the Olfactory Bulb. This was considered to be very likely to be measurement error.
 
 ```{r exploratory plots2, message = F, warning = F, eval = T}
 
@@ -82,28 +99,36 @@ Violin plots show the distribution of each metal by age and strain. Bars are pla
 df0 <- melt(df[,c(1:4, 18, 20, 21)], id.vars = c("id", "age", "strain", "region"))
 ggplot(df0, aes(x = strain, y = value, colour = age)) +
    geom_violin(draw_quantiles = c(0.025, 0.5, 0.975)) +
+   # geom_boxplot() +
    facet_grid(~variable, scales = "free") +
    theme(panel.grid.minor = element_blank(),
         panel.background = element_blank(), 
         axis.line = element_line(colour = "black"))
-
+df0 <- melt(df[,c(1:4, 13)], id.vars = c("id", "age", "strain", "region"))
+ggplot(df0, aes(x = strain, y = value, colour = age)) +
+   geom_violin(draw_quantiles = c(0.025, 0.5, 0.975)) +
+   # geom_boxplot() +
+   facet_grid(~variable, scales = "free") +
+   theme(panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black"))
 df0 <- df
 ```
 
 ### Random effect of individual mouse
 
-Line plots show the effect of individual mouse. Some animals fairly consistently have higher levels of Zn or Fe, some have consistently lower. Because we cannot control the effect of individual experimentally, we call it a "random effect" and model it as a distribution, rather than a fixed effect. This reduces the unexplained variance in the model, resulting in a more powerful model.
+Line plots show the effect of individual mouse. Some animals fairly consistently have higher levels of Zn or Fe, some have consistently lower. Because we cannot control the effect of individual experimentally, we call it a "random effect" and model it as a distribution, rather than a fixed effect. This reduces the unexplained variance in the model, resulting in a more powerful model.  *This group level variance is summarised in the ICC statistic for the full (conditonal) model, detailed below.*  
+
 
 ```{r}
-cbPalette <- rep(c("#E69F00", "#0072B2", "#D55E00", "#56B4E9", "#009E73", "#F0E442", "#CC79A7"),
-                 20)
+cbPalette <- rep(c("#E69F00", "#0072B2", "#D55E00", "#56B4E9", "#009E73", "#F0E442", "#CC79A7"), 20)
 
 ggplot(df, aes(x = region, y = logZn, group = factor(id))) +
   geom_line() +
   aes(colour = factor(id)) +
   scale_colour_manual(values=cbPalette) + 
   facet_grid(~ age + strain) +
-  guides(colour = FALSE) +
+  # guides(colour = FALSE) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(), 
@@ -116,7 +141,7 @@ ggplot(df, aes(x = region, y = logFe, group = factor(id))) +
   aes(colour = factor(id)) +
   scale_colour_manual(values=cbPalette) + 
   facet_grid(~ age + strain) +
-  guides(colour = FALSE) +
+  # guides(colour = TRUE) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
@@ -133,7 +158,7 @@ Tissue samples were taken from multiple brain and CNS sites for each animal, so 
 
 
 ```{r, echo = T}
-df <- dplyr::select(df0, c(id, age, strain, region, logFe, logZn, logCu))
+df <- dplyr::select(df0, c(id, age, strain, region, logFe, logZn, Cu))
 m_1 <- lmer(logZn ~ strain*age + (1|region) + (1|id), df, REML = F)
 m_2 <- lmer(logZn ~ region + strain*age + (1|id), df, REML = F )
 m_3 <- lmer(logZn ~ region*age + strain*age + (1|id), df, REML = F)
@@ -148,7 +173,7 @@ anova(m_3, m_4, m_5, m_6)
 
 
 ```{r}
-fit.cu <- lmer(logCu ~ region*strain + strain*age + region*age + (1|id), df)
+fit.cu <- lmer(Cu ~ region*strain + strain*age + region*age + (1|id), df)
 fit.zn <- lmer(logZn ~ region*strain + strain*age + region*age + (1|id), df)
 fit.fe <- lmer(logFe ~ region*strain + strain*age + region*age + (1|id), df)
 ```
@@ -177,7 +202,8 @@ zn <- ggplot(df.zn, aes(x = age, y= fit, colour = strain, group = strain)) +
   geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
      geom_point(position = position_dodge(width = 0.1), size=3) + 
      geom_errorbar(position = position_dodge(width = 0.1),
-                   aes(ymax=upr, ymin=lwr), width=.1) +
+                   aes(ymax=upr, ymin=lwr), width=.5) +
+  geom_jitter(width = 0.3, aes(x = age, y = logZn), alpha = 0.2) +
   facet_grid(~ region) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -200,13 +226,14 @@ cu <- ggplot(df.cu, aes(x = age, y= fit, colour = strain, group = strain)) +
   geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
      geom_point(position = position_dodge(width = 0.1), size=3) + 
      geom_errorbar(position = position_dodge(width = 0.1),
-                   aes(ymax=upr, ymin=lwr), width=.1) +
+                   aes(ymax=upr, ymin=lwr), width=.5) +
+        geom_jitter(width = 0.3, aes(x = age, y = Cu), alpha = 0.2) +
   facet_grid(~ region) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(), 
         axis.line = element_line(colour = "black")) +
-  labs(y = TeX("logCu ($\\mu$g/g)"), x = "age (months)")
+  labs(y = TeX("Cu ($\\mu$g/g)"), x = "age (months)")
 
 
 ### logFe
@@ -222,10 +249,11 @@ df.fe$upr <- apply(bootfit$t, 2, quantile, 0.975)
 df.fe$fit <- apply(bootfit$t, 2, mean)
 
 fe <- ggplot(df.fe, aes(x = age, y= fit, colour = strain, group = strain)) +
-  geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
+  geom_line(position = position_dodge(width = 0.2), aes(linetype=strain), size=0.6) +
      geom_point(position = position_dodge(width = 0.1), size=3) + 
      geom_errorbar(position = position_dodge(width = 0.1),
-                   aes(ymax=upr, ymin=lwr), width=.1) +
+                   aes(ymax=upr, ymin=lwr), width=.5) +
+      geom_jitter(width = 0.3, aes(x = age, y = logFe), alpha = 0.2) +
   facet_grid(~ region) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -250,17 +278,45 @@ fe.raw <- ggplot(df.k, aes(x = age, y = fit, colour = strain, group = strain)) +
         panel.background = element_blank(), 
         axis.line = element_line(colour = "black")) +
   labs(y = TeX("FIXED EFFECTS ONLY MODEL logFe ($\\mu$g/g)"), x = "age (months)")
+
+# profile likelihoods for the variance components
+
+# prof <- profile(fit.fe)
+# ci95 <- confint(prof, level = 0.95)
+
+
+# calculate ICC for each model
+
+a <- data.frame(VarCorr(fit.fe))$vcov
+icc.fe <- a[1]/(a[1]+a[2])
+
+a <- data.frame(VarCorr(fit.zn))$vcov
+icc.zn <- a[1]/(a[1]+a[2])
+
+a <- data.frame(VarCorr(fit.cu))$vcov
+icc.cu <- a[1]/(a[1]+a[2])
+
+
+
 #lsmeans(fit.zn, pairwise ~ age | strain)
 #lsmeans(fit.zn, pairwise ~ strain | age)
 
 
 ```
 
+### Intra-class correlation
+
+The proportion of variance explained by random effects for each (conditional) model is:
+$ICC_{Zn} =$ `r icc.zn`  
+$ICC_{Fe} =$ `r icc.fe`
+$ICC_{Cu} =$ `r icc.cu`
+
+
 ### Interaction plots
 
 After fitting the mixed effects models, 95% confidence intervals were obtained by bootstrapping using `r nsim` iterations. This is a robust (but computationally expensive) method of obtaining confidence intervals which take into account the conditional modes of the random effects (Bates, Machler, Bolker, & Walker (2014) https://arxiv.org/pdf/1406.5823.pdf ,see p 27), and the mild heterogeneity of residuals that was observed. These confidence intervals take into account all the sources of variability in the data that we *can* take into account, without making assumptions about the distribution of the residuals based on the mean and standard deviation.
 
-```{r}
+```{r, warning = F}
 cu
 zn
 fe
@@ -271,7 +327,7 @@ fe
 
 Tables of 95% CIs are produced and the results of ANOVA. **Our interest lies with the `strain` interactions**, we expect `region` and `age` differences which are of no interest in our experiment and are included for statistical adjustment.
 
-Zn (log$\mu g/gm$)
+logZn ($\mu g/gm$)
 
 ```{r}
 
@@ -282,7 +338,7 @@ print(k)
 anova(fit.zn)
 ```
   
-Cu (log$\mu g/gm$)
+Cu ($\mu g/gm$)
 
 ```{r}
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.cu, FUN = mean)
@@ -292,7 +348,7 @@ anova(fit.cu)
 ```
 
   
-Fe (log$\mu g/gm$)
+logFe ($\mu g/gm$)
 
 ```{r}
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.fe, FUN = mean)
