@@ -154,7 +154,7 @@ ggplot(df, aes(x = region, y = logFe, group = factor(id))) +
 
 Tissue samples were taken from multiple brain and CNS sites for each animal, so in order to account for this non-independence, mixed effects models were fitted using `logZn` as the response variable. A number of models were fitted investigating fixed and random effects. A final model was selected by likelihood ratio test and $\Delta AIC$ -  
 
-\[\hat{y} = region + age + strain + region*strain + strain*age + region*age + (1|id)\]
+\[y = region + age + strain + region*strain + strain*age + region*age + (1|id)\]
 
 
 ```{r, echo = T}
@@ -335,7 +335,7 @@ logZn ($\mu g/gm$)
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.zn, FUN = mean)
 k[,4:6] <- round(k[,4:6], 2)      
 print(k)
-anova(fit.zn)
+print(anova(fit.zn), digits = 2)
 ```
   
 Cu ($\mu g/gm$)
@@ -344,7 +344,7 @@ Cu ($\mu g/gm$)
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.cu, FUN = mean)
 k[,4:6] <- round(k[,4:6], 2)      
 print(k)
-anova(fit.cu)
+print(anova(fit.cu), digits = 2)
 ```
 
   
@@ -354,6 +354,88 @@ logFe ($\mu g/gm$)
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.fe, FUN = mean)
 k[,4:6] <- round(k[,4:6], 2)      
 print(k)
-anova(fit.fe)
+print(anova(fit.fe), digits = 2)
 ```
 
+
+### Effect Sizes
+
+We have already selected a parsimonious model using statistics that compare the relative fit of competing models, but as yet have no estimate of the absolute fit of the model (for each metal). Nakagawa & Schielzeth (2012) propose a general and simple method for obtaining $R^2$ from mixed models. We estimate the  *marginal* $R^2$ which describes the proportion of variance explained by the fixed factors,
+\[R^2_{LMM(m)} = \frac{\sigma^2_f}{\sigma^2_f + \Sigma\sigma^2_l + \sigma^2_e}\]
+
+Where $\sigma^2_f$ is the fixed-effects variance, $\sigma^2_l$ are the (summed) random variance components, and $\sigma^2_e$ is the residual variance. We also report the *conditional* $R^2$ which includes $\Sigma\sigma^2_l$ in the numerator.
+
+
+```{r}
+fit.cu <- lmer(Cu ~ region*strain + strain*age + region*age + (1|id), df)
+fit.zn.region.strain <- lmer(logZn ~ region*strain + strain*age + region*age + (1|id), df)
+fit.fe <- lmer(logFe ~ region*strain + strain*age + region*age + (1|id), df)
+
+f2 <- function(AB, A){
+  (AB-A)/(1-AB)
+}
+
+## Zn
+
+fit.zn.region.strain <- lmer(logZn ~ strain*age + region*age + (1|id), df)
+fit.zn.strain.age <- lmer(logZn ~ region*strain + region*age + (1|id), df)
+
+rABzn <- r.squaredGLMM(fit.zn)
+rA <- r.squaredGLMM(fit.zn.region.strain)
+marginal.region.strain.zn <- round(f2(rABzn[1], rA[1]),4)
+
+rA <- r.squaredGLMM(fit.zn.strain.age)
+marginal.strain.age.zn <- round(f2(rABzn[1], rA[1]), 4)
+
+## Cu
+
+fit.cu.region.strain <- lmer(Cu ~ strain*age + region*age + (1|id), df)
+fit.cu.strain.age <- lmer(Cu ~ region*strain + region*age + (1|id), df)
+
+rABcu <- r.squaredGLMM(fit.cu)
+rA <- r.squaredGLMM(fit.cu.region.strain)
+marginal.region.strain.cu <- round(f2(rABcu[1], rA[1]),4)
+
+rA <- r.squaredGLMM(fit.cu.strain.age)
+marginal.strain.age.cu <- round(f2(rABcu[1], rA[1]),4)
+
+## Fe
+
+fit.fe.region.strain <- lmer(logFe ~ strain*age + region*age + (1|id), df)
+fit.fe.strain.age <- lmer(logFe ~ region*strain + region*age + (1|id), df)
+
+rABfe <- r.squaredGLMM(fit.fe)
+rA <- r.squaredGLMM(fit.fe.region.strain)
+marginal.region.strain.fe <- round(f2(rABfe[1], rA[1]),4)
+
+rA <- r.squaredGLMM(fit.fe.strain.age)
+marginal.strain.age.fe <- round(f2(rABfe[1], rA[1]),4)
+
+
+```
+
+$R^2_{logFe} =$ `r round(rABfe,4)`  
+$R^2_{logZn} =$ `r round(rABzn,4)`  
+$R^2_{Cu} =$ `r round(rABcu,4)`
+
+
+An estimate of *local effect size* can then be calculated for interaction terms using *Cohen's $f^2$* statistic,    
+\[f^2 = \frac{R^2_{AB} - R^2_{A}}{1 - R^2_{AB}}\]  
+Where $R^2_{AB}$ is the $R^2$ estimated for the full model (relative to the null model), and $R^2_{A}$ is the $R^2$ estimated for the model without the interaction term of interest. Care must be taken to interpret these effect sizes in context, and they are provided as standardized measures which are of practical benefit in comparing results between studies.
+
+
+
+#### logFe
+
+Marginal effect of region:strain interaction:    `r marginal.region.strain.fe`  
+Marginal effect of strain:age interaction:        `r marginal.strain.age.fe`  
+
+#### logZn
+
+Marginal effect of region:strain interaction:    `r marginal.region.strain.zn`  
+Marginal effect of strain:age interaction:        `r marginal.strain.age.zn`  
+
+#### logCu
+
+Marginal effect of region:strain interaction:    `r marginal.region.strain.cu`  
+Marginal effect of strain:age interaction:        `r marginal.strain.age.cu`  
