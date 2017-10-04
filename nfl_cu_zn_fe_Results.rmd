@@ -220,7 +220,7 @@ icc.cu <- a[1]/(a[1]+a[2])
 
 To correct skewness, Zn and Fe variables were $log_e$-transformed prior to analysis. Mixed effects models were fitted using the `lme4` package in R. Models included a random intercept for each subject to account for non-independence between brain regions within animals. Type III F statistics were computed using Kenward-Roger approximation, and 95% confidence intervals were obtained by parametric bootstrapping.
 
-An initial analysis investigated strain x age and strain x region interactions for each metal, in a model which accounted for region x age interactions. There were significant strain x age (Zn: F(1, 27) = 9, *p* = .005; Fe: F(1, 27) = 11, *p* = .002) and strain x region (Zn: F(5, 140) = 8, *p* < .001; Fe: F(5, 140) = 3, *p* = .021) interactions for Zn and Fe, but only the strain x region interaction was significant for Cu (F(5, 139) = 4, *p* = .002).
+Strain x age and strain x region interactions were investigated for each metal, in a model which accounted for region x age interactions. For Zn and Fe, there were significant strain x age (Zn: F(1, 27) = 9, *p* = .005; Fe: F(1, 27) = 11, *p* = .002) and strain x region (Zn: F(5, 140) = 8, *p* < .001; Fe: F(5, 140) = 3, *p* = .021) interactions, but only the strain x region interaction was significant for Cu (F(5, 139) = 4, *p* = .002). Figure __ shows the strength and direction of these interactions, with 95% CIs (unadjusted for multiple comparisons).
 
 
 
