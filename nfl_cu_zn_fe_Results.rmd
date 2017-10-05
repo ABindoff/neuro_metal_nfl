@@ -70,7 +70,7 @@ df$logCu <- log(df$Cu)
 ```{r, echo = F}
 `%nin%` <- Negate(`%in%`)
 
-df <- dplyr::select(df0, c(id, age, strain, region, logFe, logZn, Cu)) %>%
+df <- dplyr::select(df, c(id, age, strain, region, logFe, logZn, Cu)) %>%
   filter(id %nin% c("238", "3183", "161470"))
 ```
 
@@ -94,8 +94,8 @@ bootfit <- bootMer(fit.zn, FUN=function(x) predict(x, df, re.form = NA),
                    parallel = "multicore",
                    ncpus = 3L)
 df.zn <- df
-df.zn$lwr <- apply(bootfit$t, 2, quantile, 0.025)
-df.zn$upr <- apply(bootfit$t, 2, quantile, 0.975)
+df.zn$lwr <- apply(bootfit$t, 2, quantile, 0.005)
+df.zn$upr <- apply(bootfit$t, 2, quantile, 0.995)
 df.zn$fit <- apply(bootfit$t, 2, mean)
 
 # confirm that bootMer gives the same mean as the sample mean
@@ -131,8 +131,8 @@ bootfit <- bootMer(fit.cu, FUN=function(x) predict(x, df, re.form = NA),
                    parallel = "multicore",
                    ncpus = 3L)
 
-df.cu$lwr <- apply(bootfit$t, 2, quantile, 0.025)
-df.cu$upr <- apply(bootfit$t, 2, quantile, 0.975)
+df.cu$lwr <- apply(bootfit$t, 2, quantile, 0.005)
+df.cu$upr <- apply(bootfit$t, 2, quantile, 0.995)
 df.cu$fit <- apply(bootfit$t, 2, mean)
 
 cu <- ggplot(df.cu, aes(x = age, y= fit, colour = strain, group = strain)) +
@@ -160,8 +160,8 @@ bootfit <- bootMer(fit.fe, FUN=function(x) predict(x, df, re.form = NA),
                    ncpus = 3L)
 
 
-df.fe$lwr <- apply(bootfit$t, 2, quantile, 0.025)
-df.fe$upr <- apply(bootfit$t, 2, quantile, 0.975)
+df.fe$lwr <- apply(bootfit$t, 2, quantile, 0.005)
+df.fe$upr <- apply(bootfit$t, 2, quantile, 0.995)
 df.fe$fit <- apply(bootfit$t, 2, mean)
 
 fe <- ggplot(df.fe, aes(x = age, y= fit, colour = strain, group = strain)) +
@@ -216,46 +216,6 @@ icc.cu <- a[1]/(a[1]+a[2])
 
 
 ```
-## Results
-
-To correct skewness, Zn and Fe variables were $log_e$-transformed prior to analysis. Mixed effects models were fitted using the `lme4` package in R. Models included a random intercept for each subject to account for non-independence between brain regions within animals. Type III F statistics were computed using Kenward-Roger approximation, and 95% confidence intervals were obtained by parametric bootstrapping.
-
-Strain x age and strain x region interactions were investigated for each metal, in a model which accounted for region x age interactions. For Zn and Fe, there were significant strain x age (Zn: F(1, 27) = 9, *p* = .005; Fe: F(1, 27) = 11, *p* = .002) and strain x region (Zn: F(5, 140) = 8, *p* < .001; Fe: F(5, 140) = 3, *p* = .021) interactions, but only the strain x region interaction was significant for Cu (F(5, 139) = 4, *p* = .002). Figure __ shows the strength and direction of these interactions, with 95% CIs (unadjusted for multiple comparisons).
-
-
-
-
-logZn ($\mu g/gm$)
-
-```{r}
-
-
-k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.zn, FUN = mean)
-k[,4:6] <- round(k[,4:6], 2)      
-print(k)
-print(anova(fit.zn, ddf = "Kenward-Roger"), digits = 2)
-```
-  
-Cu ($\mu g/gm$)
-
-```{r}
-k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.cu, FUN = mean)
-k[,4:6] <- round(k[,4:6], 2)      
-print(k)
-print(anova(fit.cu, ddf = "Kenward-Roger"), digits = 2)
-```
-
-  
-logFe ($\mu g/gm$)
-
-```{r}
-k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.fe, FUN = mean)
-k[,4:6] <- round(k[,4:6], 2)      
-print(k)
-print(anova(fit.fe, ddf = "Kenward-Roger"), digits = 2)
-```
-
-
 
 ```{r}
 fit.cu <- lmer(Cu ~ region*strain + strain*age + region*age + (1|id), df)
@@ -270,6 +230,8 @@ f2 <- function(AB, A){
 
 fit.zn.region.strain <- lmer(logZn ~ strain*age + region*age + (1|id), df)
 fit.zn.strain.age <- lmer(logZn ~ region*strain + region*age + (1|id), df)
+fit.zn.strain <- lmer(logZn ~ region*age + (1|id), df)
+
 
 rABzn <- r.squaredGLMM(fit.zn)
 rA <- r.squaredGLMM(fit.zn.region.strain)
@@ -278,10 +240,14 @@ marginal.region.strain.zn <- round(f2(rABzn[1], rA[1]),4)
 rA <- r.squaredGLMM(fit.zn.strain.age)
 marginal.strain.age.zn <- round(f2(rABzn[1], rA[1]), 4)
 
+rA <- r.squaredGLMM(fit.zn.strain)
+marginal.strain.zn <- round(f2(rABzn[1], rA[1]), 4)
+
 ## Cu
 
 fit.cu.region.strain <- lmer(Cu ~ strain*age + region*age + (1|id), df)
 fit.cu.strain.age <- lmer(Cu ~ region*strain + region*age + (1|id), df)
+fit.cu.strain <- lmer(Cu ~ region*age + (1|id), df)
 
 rABcu <- r.squaredGLMM(fit.cu)
 rA <- r.squaredGLMM(fit.cu.region.strain)
@@ -290,10 +256,14 @@ marginal.region.strain.cu <- round(f2(rABcu[1], rA[1]),4)
 rA <- r.squaredGLMM(fit.cu.strain.age)
 marginal.strain.age.cu <- round(f2(rABcu[1], rA[1]),4)
 
+rA <- r.squaredGLMM(fit.cu.strain)
+marginal.strain.cu <- round(f2(rABcu[1], rA[1]),4)
+
 ## Fe
 
 fit.fe.region.strain <- lmer(logFe ~ strain*age + region*age + (1|id), df)
 fit.fe.strain.age <- lmer(logFe ~ region*strain + region*age + (1|id), df)
+fit.fe.strain <- lmer(logFe ~ region*age + (1|id), df)
 
 rABfe <- r.squaredGLMM(fit.fe)
 rA <- r.squaredGLMM(fit.fe.region.strain)
@@ -302,6 +272,51 @@ marginal.region.strain.fe <- round(f2(rABfe[1], rA[1]),4)
 rA <- r.squaredGLMM(fit.fe.strain.age)
 marginal.strain.age.fe <- round(f2(rABfe[1], rA[1]),4)
 
+rA <- r.squaredGLMM(fit.fe.strain)
+marginal.strain.fe <- round(f2(rABfe[1], rA[1]),4)
 
 ```
 
+## Statistical Analysis
+
+Mixed effects models were fitted using the `lme4` package in R. Random intercepts for each subject were specified in order to account for non-independence between brain regions within animals. Model assumptions were checked using standard graphical techniques, and a $log_e$-transformation applied to Zn and Fe variables to improve normality of residuals and homogeneity of error variance. One outlier was removed from Cu. Type III F statistics were computed using Kenward-Roger approximation, and 99% confidence intervals (CIs) were obtained by parametric bootstrapping. The choice of 99% CIs instead of 95% CIs reflects the exploratory and descriptive nature of the analysis, as there were no planned comparisons by which to determine a corrected $\alpha$ for post-hoc testing. A measure of effect size, Cohen's $f^2$ was calculated for the effect of strain for each metal using the formula, $f^2 = \frac{R^2_{AB} - R^2_{A}}{1 - R^2_{AB}}$ where $R^2_{AB}$ is the coefficient of determination for the full model, and $R^2_{A}$ is the coefficient of determination for a reduced model that does not contain the term of interest. $R^2$ was calculated following the method of Nakagawa & Schielzeth (2012) for computing a marginal pseudo-$R^2$ for mixed models.
+
+## Results
+
+Strain x age and strain x region interactions were investigated for each metal, in a model which accounted for region x age interactions. For Zn and Fe, there were significant strain x age (Zn: F(1, 27) = 9, *p* = .005; Fe: F(1, 27) = 11, *p* = .002) and strain x region (Zn: F(5, 140) = 8, *p* < .001; Fe: F(5, 140) = 3, *p* = .021) interactions, but only the strain x region interaction was significant for Cu (F(5, 139) = 4, *p* = .002). Figure __ shows the strength and direction of these interactions, with 99% CIs. The marginal effect of strain on Cu accumulation in tissues was small ($f^2_{Cu} =$`r marginal.strain.cu`), however the effect of strain on Zn and Fe accumulation in tissues was moderate ($f^2_{log(Zn)} = $`r marginal.strain.zn`, $f^2_{log(Fe)} =$`r marginal.strain.fe`).
+
+
+
+
+logZn ($\mu g/gm$)
+
+```{r}
+
+
+k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.zn, FUN = mean)
+k[,4:6] <- round(k[,4:6], 2)      
+print(k)
+print(anova(fit.zn, ddf = "Kenward-Roger"), digits = 2)
+zn
+```
+  
+Cu ($\mu g/gm$)
+
+```{r}
+k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.cu, FUN = mean)
+k[,4:6] <- round(k[,4:6], 2)      
+print(k)
+print(anova(fit.cu, ddf = "Kenward-Roger"), digits = 2)
+cu
+```
+
+  
+logFe ($\mu g/gm$)
+
+```{r}
+k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.fe, FUN = mean)
+k[,4:6] <- round(k[,4:6], 2)      
+print(k)
+print(anova(fit.fe, ddf = "Kenward-Roger"), digits = 2)
+fe
+```

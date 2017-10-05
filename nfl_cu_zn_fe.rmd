@@ -16,10 +16,10 @@ library(ggplot2)
 library(reshape2)
 library(car)
 library(lme4)
+library(lmerTest)
 library(MuMIn)
 library(latex2exp)
 library(lsmeans)
-library(lmerTest)
 mciMean <- function(x){
   return(setNames(c(round(mean(x), 3), round(ciMean(x), 3)), c("mean", "lwr", "upr")))
 }
@@ -30,12 +30,12 @@ names(df) <- gsub("\\b\\d+\\b", "", names(df)) # remove numbers
 names(df) <- gsub("  ", "", names(df)) # remove extraneous blanks
 names(df)[1:6] <- c("id", "age", "strain", "region", "sample", "dilution")
 df$region[df$region == "Siatic nerve"] <- "Sciatic nerve"
-df$id <- as.factor(df$id)
-df$age <- as.factor(df$age)
+df$id <- factor(df$id)
+df$age <- factor(df$age)
 df$strain <- gsub("[[:punct:]]", "", df$strain)
 df$strain <- gsub("^WT AP.*", "WT_APPPS1", as.character(df$strain))
-df$strain <- as.factor(df$strain)
-df$region <- as.factor(df$region)
+df$strain <- factor(df$strain)
+df$region <- factor(df$region)
 
 df <- dplyr::select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metals at or below detection limit
     filter(strain == "WT" | strain == "NFL", age == 5 | age == 22) %>% filter(id != 15) # nfl id == 15 was 19mo
@@ -72,6 +72,8 @@ Tissue samples were taken from multiple sites (coded as `region`) in mouse brain
 From this model specification, confidence intervals which take into account model uncertainty were computed. These results are presented in plots and tables, along with the results of ANOVA tests in the statistical appendix below.
 
 There were significant `strain`:`age` interactions for measures of Zn & Fe, and significant `region`:`strain` interactions and main effect of `strain` for measures of Zn, Fe, & Cu. We expect main effects of `region` and `age` (and their interactions), and these are included for statistical adjustment only.
+
+The proportion of variance explained by the random effect of animal was 8.5% for log(Zn), 6% for log(Fe), and 10.4% for Cu. The standardized effect sizes, reported as Cohen's $f^2$, for strain x region and strain x age interactions was less than .08 (small), with the exception of the the strain x region interaction for log(Zn), which had an effect size $f^2 = .192$. The proportion of variance explained by the full models was 0.8, 0.71, and 0.78 for log(Fe), log(Zn) and Cu respectively, suggesting that most of the variance in the sample can be explained by age, region, and strain and their two-way interactions.
 
 It is suggested that the reader review the interaction plots and ANOVA tables, ignoring the remaining output which is presented for completeness and future reference.
 
@@ -158,16 +160,21 @@ Tissue samples were taken from multiple brain and CNS sites for each animal, so 
 
 
 ```{r, echo = T}
-df <- dplyr::select(df0, c(id, age, strain, region, logFe, logZn, Cu))
+`%nin%` <- Negate(`%in%`)
+
+df <- dplyr::select(df0, c(id, age, strain, region, logFe, logZn, Cu)) %>%
+  filter(id %nin% c("238", "3183", "161470"))
 m_1 <- lmer(logZn ~ strain*age + (1|region) + (1|id), df, REML = F)
 m_2 <- lmer(logZn ~ region + strain*age + (1|id), df, REML = F )
 m_3 <- lmer(logZn ~ region*age + strain*age + (1|id), df, REML = F)
 m_4 <- lmer(logZn ~ region*age*strain + (1|id), df, REML = F)
 m_5 <- lmer(logZn ~ region*strain + strain*age + region*age + (1|id), df, REML = F)
 m_6 <- lmer(logZn ~ region*strain + strain*age + (1|id), df, REML = F)
-
+m_7 <- lmer(logZn ~ region*strain + strain*age + region*age + (1|id) + (1|region), df, REML = F)
 
 anova(m_3, m_4, m_5, m_6)
+
+anova(m_5, m_7)
 
 ```
 
@@ -195,21 +202,31 @@ df.zn$lwr <- apply(bootfit$t, 2, quantile, 0.025)
 df.zn$upr <- apply(bootfit$t, 2, quantile, 0.975)
 df.zn$fit <- apply(bootfit$t, 2, mean)
 
+# confirm that bootMer gives the same mean as the sample mean
+# k <- group_by(df.zn, region, age, strain) %>% summarise(fit = mean(logZn, na.rm = T))
+# df.zn <- left_join(df.zn, k)
+
+
 # ci <- confint(fit.zn, method = "boot")
 # df.zn$lwr 
+pal <- c("dodgerblue1", "firebrick")
+lab <- c("WT", "TG")
 
 zn <- ggplot(df.zn, aes(x = age, y= fit, colour = strain, group = strain)) +
-  geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
-     geom_point(position = position_dodge(width = 0.1), size=3) + 
-     geom_errorbar(position = position_dodge(width = 0.1),
+  scale_colour_manual(values = pal,
+                        name = element_blank(),
+                        labels = lab) +
+  geom_line(position = position_dodge(width = 0.2), aes(linetype=strain), size=.6, show.legend = F) +
+     geom_point(position = position_dodge(width = 0.2), size=3) + 
+     geom_errorbar(position = position_dodge(width = 0.2),
                    aes(ymax=upr, ymin=lwr), width=.5) +
-  geom_jitter(width = 0.3, aes(x = age, y = logZn), alpha = 0.2) +
+  geom_jitter(width = 0.3, aes(x = age, y = logZn), alpha = 1/4) +
   facet_grid(~ region) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(), 
         axis.line = element_line(colour = "black")) +
-  labs(y = TeX("logZn ($\\mu$g/g)"), x = "age (months)")
+  labs(y = TeX("Zn log_{e}($\\mu$g/g)"), x = "Age (months)")
 
 ### logCu
 df.cu <- df
@@ -223,17 +240,20 @@ df.cu$upr <- apply(bootfit$t, 2, quantile, 0.975)
 df.cu$fit <- apply(bootfit$t, 2, mean)
 
 cu <- ggplot(df.cu, aes(x = age, y= fit, colour = strain, group = strain)) +
-  geom_line(position = position_dodge(width = 0.1), aes(linetype=strain), size=.6) +
-     geom_point(position = position_dodge(width = 0.1), size=3) + 
-     geom_errorbar(position = position_dodge(width = 0.1),
+  scale_colour_manual(values = pal,
+                        name = element_blank(),
+                        labels = lab) +
+  geom_line(position = position_dodge(width = 0.2), aes(linetype=strain), size=.6, show.legend = F) +
+     geom_point(position = position_dodge(width = 0.2), size=3) + 
+     geom_errorbar(position = position_dodge(width = 0.2),
                    aes(ymax=upr, ymin=lwr), width=.5) +
-        geom_jitter(width = 0.3, aes(x = age, y = Cu), alpha = 0.2) +
+  geom_jitter(width = 0.3, aes(x = age, y = Cu), alpha = 1/4) +
   facet_grid(~ region) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(), 
         axis.line = element_line(colour = "black")) +
-  labs(y = TeX("Cu ($\\mu$g/g)"), x = "age (months)")
+  labs(y = TeX("Cu ($\\mu$g/g)"), x = "Age (months)")
 
 
 ### logFe
@@ -249,17 +269,20 @@ df.fe$upr <- apply(bootfit$t, 2, quantile, 0.975)
 df.fe$fit <- apply(bootfit$t, 2, mean)
 
 fe <- ggplot(df.fe, aes(x = age, y= fit, colour = strain, group = strain)) +
-  geom_line(position = position_dodge(width = 0.2), aes(linetype=strain), size=0.6) +
-     geom_point(position = position_dodge(width = 0.1), size=3) + 
-     geom_errorbar(position = position_dodge(width = 0.1),
+  scale_colour_manual(values = pal,
+                        name = element_blank(),
+                        labels = lab) +
+  geom_line(position = position_dodge(width = 0.2), aes(linetype=strain), size=.6, show.legend = F) +
+     geom_point(position = position_dodge(width = 0.2), size=3) + 
+     geom_errorbar(position = position_dodge(width = 0.2),
                    aes(ymax=upr, ymin=lwr), width=.5) +
-      geom_jitter(width = 0.3, aes(x = age, y = logFe), alpha = 0.2) +
+  geom_jitter(width = 0.3, aes(x = age, y = logFe), alpha = 1/4) +
   facet_grid(~ region) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(), 
         axis.line = element_line(colour = "black")) +
-  labs(y = TeX("logFe ($\\mu$g/g)"), x = "age (months)")
+  labs(y = TeX("Fe log_{e}($\\mu$g/g)"), x = "Age (months)")
 
 # fixed effects estimates (not bootstrapped)
 
@@ -278,12 +301,6 @@ fe.raw <- ggplot(df.k, aes(x = age, y = fit, colour = strain, group = strain)) +
         panel.background = element_blank(), 
         axis.line = element_line(colour = "black")) +
   labs(y = TeX("FIXED EFFECTS ONLY MODEL logFe ($\\mu$g/g)"), x = "age (months)")
-
-# profile likelihoods for the variance components
-
-# prof <- profile(fit.fe)
-# ci95 <- confint(prof, level = 0.95)
-
 
 # calculate ICC for each model
 
@@ -335,7 +352,49 @@ logZn ($\mu g/gm$)
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.zn, FUN = mean)
 k[,4:6] <- round(k[,4:6], 2)      
 print(k)
-print(anova(fit.zn), digits = 2)
+print(anova(fit.zn, ddf = "Kenward-Roger"), digits = 2)
+```
+
+#### Sidak-adjusted comparisons, strain*age
+
+Cortex  
+
+
+```{r}
+region.zn <- lm(logZn ~ strain*age, filter(df, region == "Cortex"))
+region.zn.contr <- lsmeans(region.zn, ~strain*age)
+contrast(region.zn.contr, alpha = .05, by = "age", adjust = NULL)
+```
+  
+  Hippocampus  
+  
+```{r}
+region.zn <- lm(logZn ~ strain*age, filter(df, region == "Hippocampus"))
+region.zn.contr <- lsmeans(region.zn, ~strain *age)
+contrast(region.zn.contr, alpha = .05, by = "age", adjust = NULL)
+```
+  
+  Sciatic nerve  
+  
+```{r}
+region.zn <- lm(logZn ~ strain*age, filter(df, region == "Sciatic nerve"))
+region.zn.contr <- lsmeans(region.zn, ~strain*age)
+contrast(region.zn.contr, alpha = .05, by = "age", adjust = NULL)
+
+# strain.region <- lsmeans(fit.zn, ~strain*region)
+# strain.age <- lsmeans(fit.zn, ~strain*age)
+# contrast(strain.age, alpha = 0.05, method = "pairwise", adjust= "Tukey")
+```
+
+
+```{r, eval = T}
+
+qqnorm(resid(fit.zn))
+qqline(resid(fit.zn))
+qqnorm(resid(fit.cu))
+qqline(resid(fit.cu))
+qqnorm(resid(fit.fe))
+qqline(resid(fit.fe))
 ```
   
 Cu ($\mu g/gm$)
@@ -344,9 +403,34 @@ Cu ($\mu g/gm$)
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.cu, FUN = mean)
 k[,4:6] <- round(k[,4:6], 2)      
 print(k)
-print(anova(fit.cu), digits = 2)
+print(anova(fit.cu, ddf = "Kenward-Roger"), digits = 2)
 ```
+#### Sidak-adjusted comparisons, strain*age
 
+Cortex  
+
+
+```{r}
+region.cu <- lm(Cu ~ strain*age, filter(df, region == "Cortex"))
+region.cu.contr <- lsmeans(region.cu, ~strain*age)
+contrast(region.cu.contr, alpha = .05, by = "age", adjust = NULL)
+```
+  
+  Hippocampus  
+  
+```{r}
+region.cu <- lm(Cu ~ strain*age, filter(df, region == "Hippocampus"))
+region.cu.contr <- lsmeans(region.cu, ~strain*age)
+contrast(region.cu.contr, alpha = .05, by = "age", adjust = NULL)
+```
+  
+  Sciatic nerve  
+  
+```{r}
+region.cu <- lm(Cu ~ strain*age, filter(df, region == "Sciatic nerve"))
+region.cu.contr <- lsmeans(region.cu, ~strain*age)
+contrast(region.cu.contr, alpha = .05, by = "age", adjust = NULL)
+```
   
 logFe ($\mu g/gm$)
 
@@ -354,16 +438,42 @@ logFe ($\mu g/gm$)
 k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.fe, FUN = mean)
 k[,4:6] <- round(k[,4:6], 2)      
 print(k)
-print(anova(fit.fe), digits = 2)
+print(anova(fit.fe, ddf = "Kenward-Roger"), digits = 2)
 ```
 
+#### Sidak-adjusted comparisons, strain*age
+
+Cortex  
+
+
+```{r}
+region.fe <- lm(logFe ~ strain*age, filter(df, region == "Cortex"))
+region.fe.contr <- lsmeans(region.fe, ~strain*age)
+contrast(region.fe.contr, alpha = .05, by = "age", adjust = NULL)
+```
+  
+  Hippocampus  
+  
+```{r}
+region.fe <- lm(logFe ~ strain*age, filter(df, region == "Hippocampus"))
+region.fe.contr <- lsmeans(region.fe, ~strain*age)
+contrast(region.fe.contr, alpha = .05, by = "age", adjust = NULL)
+```
+  
+  Sciatic nerve  
+  
+```{r}
+region.fe <- lm(logFe ~ strain*age, filter(df, region == "Sciatic nerve"))
+region.fe.contr <- lsmeans(region.fe, ~strain*age)
+contrast(region.fe.contr, alpha = .05, by = "age", adjust = NULL)
+```
 
 ### Effect Sizes
 
 We have already selected a parsimonious model using statistics that compare the relative fit of competing models, but as yet have no estimate of the absolute fit of the model (for each metal). Nakagawa & Schielzeth (2012) propose a general and simple method for obtaining $R^2$ from mixed models. We estimate the  *marginal* $R^2$ which describes the proportion of variance explained by the fixed factors,
 \[R^2_{LMM(m)} = \frac{\sigma^2_f}{\sigma^2_f + \Sigma\sigma^2_l + \sigma^2_e}\]
 
-Where $\sigma^2_f$ is the fixed-effects variance, $\sigma^2_l$ are the (summed) random variance components, and $\sigma^2_e$ is the residual variance. We also report the *conditional* $R^2$ which includes $\Sigma\sigma^2_l$ in the numerator.
+Where $\sigma^2_f$ is the fixed-effects variance, $\sigma^2_l$ are the (summed) random variance components, and $\sigma^2_e$ is the residual variance. We also report the *conditional* $R^2$ which can be interpreted as the variance explained by the full mixed model (Nakagawa & Schielzeth, 2012).
 
 
 ```{r}
@@ -414,14 +524,14 @@ marginal.strain.age.fe <- round(f2(rABfe[1], rA[1]),4)
 
 ```
 
-$R^2_{logFe} =$ `r round(rABfe,4)`  
+$R^2_{logFe} =$ `r round(rABfe,4)` (marginal, conditional)  
 $R^2_{logZn} =$ `r round(rABzn,4)`  
 $R^2_{Cu} =$ `r round(rABcu,4)`
 
 
-An estimate of *local effect size* can then be calculated for interaction terms using *Cohen's $f^2$* statistic,    
+An estimate of *local effect size* is calculated for interaction terms using *Cohen's $f^2$* statistic,    
 \[f^2 = \frac{R^2_{AB} - R^2_{A}}{1 - R^2_{AB}}\]  
-Where $R^2_{AB}$ is the $R^2$ estimated for the full model (relative to the null model), and $R^2_{A}$ is the $R^2$ estimated for the model without the interaction term of interest. Care must be taken to interpret these effect sizes in context, and they are provided as standardized measures which are of practical benefit in comparing results between studies.
+Where $R^2_{AB}$ is the marginal co-efficient of determination estimated for the full model (as described above), and $R^2_{A}$ is the marginal co-efficient of determination estimated for the model dropping the interaction term of interest. Care must be taken to interpret these effect sizes in context, and they are provided as standardized measures which are of practical benefit in comparing results between studies.
 
 
 
