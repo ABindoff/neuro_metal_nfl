@@ -2,7 +2,9 @@
 title: "CU, Zn, Fe in brains of NFL knock-out mice"
 author: "Bindoff, A."
 date: "10th August 2017"
-output: html_document
+output:
+  word_document: 
+  fig_width: 10
 ---
 
 ```{r setup, include=FALSE}
@@ -241,7 +243,7 @@ rA <- r.squaredGLMM(fit.zn.strain.age)
 marginal.strain.age.zn <- round(f2(rABzn[1], rA[1]), 4)
 
 rA <- r.squaredGLMM(fit.zn.strain)
-marginal.strain.zn <- round(f2(rABzn[1], rA[1]), 4)
+marginal.strain.zn <- round(f2(rABzn[1], rA[1]), 2)
 
 ## Cu
 
@@ -257,7 +259,7 @@ rA <- r.squaredGLMM(fit.cu.strain.age)
 marginal.strain.age.cu <- round(f2(rABcu[1], rA[1]),4)
 
 rA <- r.squaredGLMM(fit.cu.strain)
-marginal.strain.cu <- round(f2(rABcu[1], rA[1]),4)
+marginal.strain.cu <- round(f2(rABcu[1], rA[1]), 2)
 
 ## Fe
 
@@ -273,50 +275,23 @@ rA <- r.squaredGLMM(fit.fe.strain.age)
 marginal.strain.age.fe <- round(f2(rABfe[1], rA[1]),4)
 
 rA <- r.squaredGLMM(fit.fe.strain)
-marginal.strain.fe <- round(f2(rABfe[1], rA[1]),4)
+marginal.strain.fe <- round(f2(rABfe[1], rA[1]), 2)
 
 ```
 
 ## Statistical Analysis
 
-Mixed effects models were fitted using the `lme4` package in R. Random intercepts for each subject were specified in order to account for non-independence between brain regions within animals. Model assumptions were checked using standard graphical techniques, and a $log_e$-transformation applied to Zn and Fe variables to improve normality of residuals and homogeneity of error variance. One outlier was removed from Cu. Type III F statistics were computed using Kenward-Roger approximation, and 99% confidence intervals (CIs) were obtained by parametric bootstrapping. The choice of 99% CIs instead of 95% CIs reflects the exploratory and descriptive nature of the analysis, as there were no planned comparisons by which to determine a corrected $\alpha$ for post-hoc testing. A measure of effect size, Cohen's $f^2$ was calculated for the effect of strain for each metal using the formula, $f^2 = \frac{R^2_{AB} - R^2_{A}}{1 - R^2_{AB}}$ where $R^2_{AB}$ is the coefficient of determination for the full model, and $R^2_{A}$ is the coefficient of determination for a reduced model that does not contain the term of interest. $R^2$ was calculated following the method of Nakagawa & Schielzeth (2012) for computing a marginal pseudo-$R^2$ for mixed models.
+Mixed effects models were fitted using the `lme4` package in R. Random intercepts for each subject were specified in order to account for non-independence between brain regions within animals. Model assumptions were checked using standard graphical techniques, and a $log_e$-transformation applied to Zn and Fe variables to improve normality of residuals and homogeneity of error variance. One outlier was removed from Cu. Type III F statistics were computed using Kenward-Roger approximation, and 99% confidence intervals (CIs) were obtained by parametric bootstrapping. The choice of 99% CIs instead of 95% CIs reflects the exploratory and descriptive nature of the analysis, as there were no planned comparisons by which to determine a corrected $\alpha$ for post-hoc testing. A measure of standardized effect size, Cohen's $f^2$ was calculated for the effect of strain for each metal using the formula, $f^2 = \frac{R^2_{AB} - R^2_{A}}{1 - R^2_{AB}}$ where $R^2_{AB}$ is the coefficient of determination for the full model, and $R^2_{A}$ is the coefficient of determination for a reduced model that does not contain the term of interest. The method of Nakagawa & Schielzeth (2012) for computing a marginal pseudo-$R^2$ for mixed models was used to calculate $R^2$ coefficients.
 
 ## Results
 
-Strain x age and strain x region interactions were investigated for each metal, in a model which accounted for region x age interactions. For Zn and Fe, there were significant strain x age (Zn: F(1, 27) = 9, *p* = .005; Fe: F(1, 27) = 11, *p* = .002) and strain x region (Zn: F(5, 140) = 8, *p* < .001; Fe: F(5, 140) = 3, *p* = .021) interactions, but only the strain x region interaction was significant for Cu (F(5, 139) = 4, *p* = .002). Figure __ shows the strength and direction of these interactions, with 99% CIs. The marginal effect of strain on Cu accumulation in tissues was small ($f^2_{Cu} =$`r marginal.strain.cu`), however the effect of strain on Zn and Fe accumulation in tissues was moderate ($f^2_{log(Zn)} = $`r marginal.strain.zn`, $f^2_{log(Fe)} =$`r marginal.strain.fe`).
+Strain x age and strain x region interactions were investigated for each metal in a model which accounted for region x age interactions and intraclass correlation within region for each animal. For Zn and Fe, there were significant strain x age interactions (Zn: F(1, 27) = 9, *p* = .005; Fe: F(1, 27) = 11, *p* = .002) and strain x region interactions (Zn: F(5, 140) = 8, *p* < .001; Fe: F(5, 140) = 3, *p* = .021), but only the strain x region interaction was significant for Cu (F(5, 139) = 4, *p* = .002). Figures 1a, 1b, & 1c show the strength and direction of these interactions (with 99% CIs). The standardized effect of strain on Cu accumulation in tissues was small ($f^2_{Cu} =$ `r marginal.strain.cu`), however the standardized effect of strain on Zn and Fe accumulation in tissues was moderate ($f^2_{log(Zn)} =$ `r marginal.strain.zn`, $f^2_{log(Fe)} =$ `r marginal.strain.fe`).
 
 
-
-
-logZn ($\mu g/gm$)
-
-```{r}
-
-
-k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.zn, FUN = mean)
-k[,4:6] <- round(k[,4:6], 2)      
-print(k)
-print(anova(fit.zn, ddf = "Kenward-Roger"), digits = 2)
+```{r, fig.width = 10}
 zn
-```
-  
-Cu ($\mu g/gm$)
-
-```{r}
-k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.cu, FUN = mean)
-k[,4:6] <- round(k[,4:6], 2)      
-print(k)
-print(anova(fit.cu, ddf = "Kenward-Roger"), digits = 2)
-cu
-```
-
-  
-logFe ($\mu g/gm$)
-
-```{r}
-k <- aggregate(cbind(fit, lwr, upr) ~ region*strain*age, df.fe, FUN = mean)
-k[,4:6] <- round(k[,4:6], 2)      
-print(k)
-print(anova(fit.fe, ddf = "Kenward-Roger"), digits = 2)
 fe
+cu
+
 ```
+
