@@ -8,7 +8,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning = F)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
 ```{r load, message = F, warning = F}
@@ -41,7 +41,7 @@ df$region <- factor(df$region)
 
 df <- dplyr::select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metals at or below detection limit
     filter(strain == "WT" | strain == "NFL", age == 5 | age == 22) %>% filter(id != 15) # nfl id == 15 was 19mo
-df$strain <- factor(df$strain, levels = c("WT", "NFL"))
+df$strain <- factor(df$strain, levels = c("WT", "NFL"), labels = c("WT", "NFL-KO"))
 df$age <- factor(df$age, levels = c(5, 22))
 df <- na.omit(df)
 
@@ -73,14 +73,13 @@ lab <- c("WT", "NFL KO")
 ```{r}
 fit.cu <- lmer(Cu ~ region*strain + strain*age + region*age + (1|id), df)
 fit.zn <- lmer(logZn ~ region*strain + strain*age + region*age + (1|id), df)
-fit.fe1 <- lmer(logFe ~ region*strain + strain*age + region*age + (1|id), df)
-fit.fe <- lmer(logFe ~ region*strain*age + (1|id), df)
+fit.fe <- lmer(logFe ~ region*strain + strain*age + region*age + (1|id), df)
 
 ```
   
-```{r bootstrapping, warning = F, message = F}
+```{r bootstrapping, eval = FALSE, warning = F, message = F}
 set.seed(123)
-nsim <- 200
+nsim <- 500
 ### logZn
 
 # df.zn <- data.frame(region = factor(rep(levels(df$region), 4)),
@@ -100,7 +99,7 @@ df.fe$fit <- apply(bootfit$t, 2, mean)
 ```
 
 
-```{r}
+```{r eval = FALSE}
 dw <- 0.4
 round5 <- function(x){
   round(x*2, -1)/2
@@ -124,34 +123,19 @@ ggplot(df.fe, aes(x = strain, colour = age, y = Fe, group = age)) +
 
 ```
 
-```{r bootstrapping, warning = F, message = F}
-fit.fe.whole <- lmer(logFe ~ region*strain*age + (1|id), df, REML = TRUE)
+Estimate marginal means over regions. Confidence intervals estimated using Kenward-Roger approximation of degrees of freedom. 
 
-nd.fe <- ggeffects::ggpredict(fit.fe.whole, terms = c("strain", "age"), type = "fe", x.as.factor = TRUE) %>%
+Russell Lenth (2019). emmeans: Estimated Marginal Means, aka Least-Squares Means. R package version 1.3.4.
+  https://CRAN.R-project.org/package=emmeans
+
+```{r fe_emm, warning = F, message = F}
+
+nd.fe <- ggeffects::ggemmeans(fit.fe, terms = c("strain", "age"), type = "fe", x.as.factor = TRUE) %>%
   transmute(age = group,
             strain = x,
             fit = predicted,
             lwr = conf.low,
             upr = conf.high)
-
-# 
-# `%notin%` <- Negate(`%in%`)
-# collapse_t <- function(x, bootfit, ignore){
-#   k <- attributes(attributes(bootfit$data)$terms)$varnames.fixed[-1]
-#   k <- k[k %notin% ignore]
-#   x$hash <- unlist(purrr::pmap(x[,k], paste0))
-#   u <- unique(x$hash)
-#   j <- lapply(u, function(z) which(x$hash %in% z))
-#   g <- lapply(j, function(z) c(bootfit$t[,z]))
-#   y <- x %>% purrrlyr::slice_rows(k) %>% summarise()
-#   y$fit <- unlist(lapply(g, mean))
-#   y$lwr <- unlist(lapply(g, quantile, 0.025))
-#   y$upr <- unlist(lapply(g, quantile, 0.975))
-#   return(y)
-# }
-# 
-# nd <- collapse_t(nd.fe, bootfit, "region")
-# 
 
 pal <- c("dodgerblue4", "firebrick4")
 lab <- c("WT", "NFL KO")
@@ -160,30 +144,112 @@ lab <- c("WT", "NFL KO")
 
 
 ```{r}
-dw <- 0.9
+dw <- 0.8
+pa <- 0.8
+
 round5 <- function(x){
   round(x*2, -1)/2
 }
 set.seed(1)
-ggplot(nd.fe, aes(x = age, y = fit, group = strain)) +
+ggplot(nd.fe, aes(x = age, y = exp(fit), ymin = exp(lwr), ymax = exp(upr), group = strain)) +
   scale_colour_manual(values = pal,
                         name = element_text("Genotype")) +
   #geom_point(data = df, aes(y = Fe), position = position_jitterdodge(dodge.width = dw), alpha = 0.2) +
-  ggbeeswarm::geom_quasirandom(data = df, aes(y = Fe, shape = region, colour = strain),
+  ggbeeswarm::geom_quasirandom(data = df, inherit.aes = FALSE, aes(y = Fe, x = age, shape = region, group = strain, colour = strain),
                                dodge.width = dw,
-                               alpha = 0.5,
-                               size = 1.5,
+                               alpha = pa,
+                               size = 2,
                                width = dw/4) +
-  scale_shape_manual(values = c(0,1,2,3,4,6)) +
-  geom_errorbar(aes(ymin = exp(lwr), ymax = exp(upr)), width = 0.15, position = position_dodge(width = dw), size = 1) +
-  geom_point(aes(y = exp(fit)), position = position_dodge(width = dw), size = 3) +
+  scale_shape_manual(values = c(0,1,2,3,4,6),
+                     name = element_text("Region")) +
+  geom_errorbar(width = 0.15, position = position_dodge(width = dw), size = 1) +
+  geom_point(position = position_dodge(width = dw), size = 2.2) +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(), 
         axis.line = element_line(colour = "black"),
         strip.text = element_text(size = 9)) +
-  #scale_y_continuous(trans = "log",
-  #  breaks = scales::trans_breaks("log", function(x) round5(2^x))) +
+  # scale_y_continuous(trans = "log",
+  #   breaks = scales::trans_breaks("log", function(x) round5(2^x))) +
   labs(y = TeX("Fe ($\\mu$g/g)"), x = "Age (months)")
+
+```
+
+```{r cu_emm, warning = F, message = F}
+
+nd.cu <- ggeffects::ggemmeans(fit.cu, terms = c("strain", "age"), type = "fe", x.as.factor = TRUE) %>%
+  transmute(age = group,
+            strain = x,
+            fit = predicted,
+            lwr = conf.low,
+            upr = conf.high)
+
+
+```
+
+
+```{r}
+
+set.seed(1)
+ggplot(nd.cu, aes(x = age, y = fit, ymin = lwr, ymax = upr, group = strain)) +
+  scale_colour_manual(values = pal,
+                        name = element_text("Genotype")) +
+  #geom_point(data = df, aes(y = Fe), position = position_jitterdodge(dodge.width = dw), alpha = 0.2) +
+  ggbeeswarm::geom_quasirandom(data = df, inherit.aes = FALSE, aes(y = Cu, x = age, shape = region, group = strain, colour = strain),
+                               dodge.width = dw,
+                               alpha = pa,
+                               size = 2,
+                               width = dw/4) +
+  scale_shape_manual(values = c(0,1,2,3,4,6),
+                     name = element_text("Region")) +
+  geom_errorbar(width = 0.15, position = position_dodge(width = dw), size = 1) +
+  geom_point(position = position_dodge(width = dw), size = 2.2) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        strip.text = element_text(size = 9)) +
+  # scale_y_continuous(trans = "log",
+  #   breaks = scales::trans_breaks("log", function(x) round5(2^x))) +
+  labs(y = TeX("Cu ($\\mu$g/g)"), x = "Age (months)")
+
+```
+
+```{r zn_emm, warning = F, message = F}
+
+nd.zn <- ggeffects::ggemmeans(fit.zn, terms = c("strain", "age"), type = "fe", x.as.factor = TRUE) %>%
+  transmute(age = group,
+            strain = x,
+            fit = predicted,
+            lwr = conf.low,
+            upr = conf.high)
+
+```
+
+
+```{r}
+
+ggplot(nd.zn, aes(x = age, y = exp(fit), ymin = exp(lwr), ymax = exp(upr), group = strain)) +
+  scale_colour_manual(values = pal,
+                        name = element_text("Genotype")) +
+  #geom_point(data = df, aes(y = Fe), position = position_jitterdodge(dodge.width = dw), alpha = 0.2) +
+  ggbeeswarm::geom_quasirandom(data = df, inherit.aes = FALSE, aes(y = Zn, x = age, shape = region, group = strain, colour = strain),
+                               dodge.width = dw,
+                               alpha = pa,
+                               size = 2,
+                               width = dw/4) +
+  scale_shape_manual(values = c(0,1,2,3,4,6),
+                     name = element_text("Region")) +
+  geom_errorbar(width = 0.15, position = position_dodge(width = dw), size = 1) +
+  geom_point(position = position_dodge(width = dw), size = 2.2) +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        strip.text = element_text(size = 9)) +
+  ylim(0, 180) +
+  # scale_y_continuous(trans = "log",
+  #   breaks = scales::trans_breaks("log", function(x) round5(2^x))) +
+  labs(y = TeX("Zn ($\\mu$g/g)"), x = "Age (months)")
 
 ```
