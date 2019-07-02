@@ -1,7 +1,9 @@
 ---
 title: "Metal clustering"
 author: "Bindoff, A."
-output: html_document
+output:
+    html_document:
+          code_folding: hide
 ---
 
 `r Sys.time()`
@@ -18,10 +20,6 @@ library(reshape2)
 library(latex2exp)
 library(Rtsne)
 library(vegan)
-mciMean <- function(x){
-  return(setNames(c(round(mean(x), 3), round(ciMean(x), 3)), c("mean", "lwr", "upr")))
-}
-
 
 df <- read_csv("neuro_metal_nfl.csv", trim_ws = T)
 names(df) <- gsub("\\b\\d+\\b", "", names(df)) # remove numbers
@@ -53,93 +51,10 @@ pal <- scico::scico(n = 6, palette = 'batlow')
 
 ```
 
-tSNE 'discovers' clusters which clearly delineate into brain regions when metals are scaled irrespective of region or age.  
+## Heatmap
 
-```{r}
-set.seed(77)
-A <- sapply(6:16, function(x) scale(df[, x]))
-A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
+Metal concentrations are standardized across region and age. Metals are ordinated by similarity of composition.  
 
-m1 <- Rtsne(A, dim = 2, perplexity = 10, max_iter = 6000, theta = 0.1)
-
-d <- data.frame(y1 = m1$Y[, 1], 
-                y2 = m1$Y[, 2],
-                strain = df$strain,
-                id = df$id,
-                region = df$region,
-                age = df$age,
-                strain = df$strain)
-
-ggplot(d, aes(x = y1, y = y2, colour = region)) +
-  geom_point() +
-  scico::scale_color_scico_d(palette = "batlow") +
-  theme_minimal()
-
-```
-
-Clusters start to form around genotypes when data are grouped by region and age then scaled.  
-
-```{r}
-metals <- c("Na",
-            "Mg",
-            "Al",
-            "K",
-            "Ca",
-            "Mn",
-            "Fe",
-            "Cu",
-            "Zn",
-            "Se",
-            "Rb")
-metals <- names(df[, 6:16])
-B <- filter(df) %>%
-  group_by(region, age) %>%
-  mutate(Na = scale(Na),
-         Mg = scale(Mg),
-         Al = scale(Al),
-         K = scale(K), 
-         Ca = scale(Ca),
-         Mn = scale(Mn),
-         Fe = scale(Fe),
-         Cu = scale(Cu),
-         Zn = scale(Zn),
-         Se = scale(Se),
-         Rb = scale(Rb)) %>%
-  ungroup() 
-
-A <- select(B, metals)
-A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
-
-set.seed(888)
-m1 <- Rtsne(A, dim = 2,
-            perplexity = 7,
-            max_iter = 10000, 
-            theta = 0.05)
-
-# make a data frame that assigns an attribute one 
-# column/taxa at a time
-foo <- function(x){
-  g <- as.matrix(B[, x])
-  B %>% mutate(attr = g,
-               Metal = x,
-                    y1 = m1$Y[, 1],
-                    y2 = m1$Y[, 2])
-  
-}
-
-k <- lapply(metals, foo)
-k <- dplyr::bind_rows(k)
-
-p1 <- ggplot(k, aes(x = y1, y = y2, colour = strain, size = attr, alpha = col, frame = Metal, scale = 1.5)) +
-  geom_point() +
-  scale_colour_manual(values = pal[c(3, 5)]) +
-  theme_minimal()
-
-plotly::ggplotly(p1)
-
-```
-
-  
 ```{r echo = TRUE}
 set.seed(42)
 
@@ -149,7 +64,7 @@ B <- filter(df) %>%
          Mg = scale(Mg),
          Al = scale(Al),
          K = scale(K), 
-         Ca = scale(Ca),
+         Ca = scale(log(Ca)),
          Mn = scale(Mn),
          Fe = scale(Fe),
          Cu = scale(Cu),
@@ -191,3 +106,69 @@ ggplot(B1, aes(x = variable, y = sample,
   xlab("Metal")
 
 ```
+
+tSNE 'discovers' clusters which clearly delineate into brain regions when metals are scaled irrespective of region or age.  
+
+```{r}
+set.seed(77)
+A <- sapply(6:16, function(x) scale(df[, x]))
+A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
+
+m1 <- Rtsne(A, dim = 2, perplexity = 10, max_iter = 6000, theta = 0.1)
+
+d <- data.frame(y1 = m1$Y[, 1], 
+                y2 = m1$Y[, 2],
+                strain = df$strain,
+                id = df$id,
+                region = df$region,
+                age = df$age,
+                strain = df$strain)
+
+ggplot(d, aes(x = y1, y = y2, colour = region)) +
+  geom_point(size = 1.5, alpha = 0.9) +
+  geom_point(size = 4, alpha = 0.2) +
+  scico::scale_color_scico_d(palette = "batlow") +
+  theme_minimal()
+
+```
+
+Clusters start to form around genotypes when data are grouped by region and age then scaled. Size and transparency are varied according to standardized metal concentration. For a strong contrast, compare Rb with Fe.  
+
+```{r}
+metals <- mets$rowname
+
+A <- select(B, metals)
+A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
+
+set.seed(888)
+m1 <- Rtsne(A, dim = 2,
+            perplexity = 7,
+            max_iter = 10000, 
+            theta = 0.05)
+
+# make a data frame that assigns an attribute one 
+# column/taxa at a time
+foo <- function(x){
+  g <- as.matrix(B[, x])
+  B %>% mutate(att = g,
+               Metal = x,
+                    y1 = m1$Y[, 1],
+                    y2 = m1$Y[, 2])
+  
+}
+
+k <- lapply(metals, foo)
+k <- dplyr::bind_rows(k)
+k$Metal <- factor(k$Metal, metals)
+
+p1 <- ggplot(k, aes(x = y1, y = y2, colour = strain, size = att, alpha = att, frame = Metal, scale = 1.5)) +
+  geom_point() +
+  geom_point(size = .5, alpha = .8) +
+  scale_colour_manual(values = pal[c(2, 4)]) +
+  theme_minimal()
+
+plotly::ggplotly(p1)
+
+```
+
+  
