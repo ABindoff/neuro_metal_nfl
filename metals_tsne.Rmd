@@ -35,7 +35,9 @@ df$strain <- gsub("^WT AP.*", "WT_APPPS1", as.character(df$strain))
 df$strain <- factor(df$strain)
 df$region <- factor(df$region)
 
-df <- dplyr::select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metals at or below detection limit
+sel <- c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)
+
+df <- dplyr::select(df, sel) %>%# remove metals at or below detection limit
     filter(strain == "WT" | strain == "NFL", age == 5 | age == 22) %>% filter(id != 15) # nfl id == 15 was 19mo
 df$strain <- factor(df$strain, levels = c("WT", "NFL"), labels = c("WT", "NFL-KO"))
 df$age <- factor(df$age, levels = c(5, 22))
@@ -54,6 +56,7 @@ pal <- scico::scico(n = 6, palette = 'batlow')
 tSNE 'discovers' clusters which clearly delineate into brain regions when metals are scaled irrespective of region or age.  
 
 ```{r}
+set.seed(77)
 A <- sapply(6:16, function(x) scale(df[, x]))
 A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
 
@@ -74,7 +77,7 @@ ggplot(d, aes(x = y1, y = y2, colour = region)) +
 
 ```
 
-Clusters start to form around regions when data are grouped by region and age then scaled.  
+Clusters start to form around genotypes when data are grouped by region and age then scaled.  
 
 ```{r}
 metals <- c("Na",
@@ -88,13 +91,64 @@ metals <- c("Na",
             "Zn",
             "Se",
             "Rb")
+metals <- names(df[, 6:16])
+B <- filter(df) %>%
+  group_by(region, age) %>%
+  mutate(Na = scale(Na),
+         Mg = scale(Mg),
+         Al = scale(Al),
+         K = scale(K), 
+         Ca = scale(Ca),
+         Mn = scale(Mn),
+         Fe = scale(Fe),
+         Cu = scale(Cu),
+         Zn = scale(Zn),
+         Se = scale(Se),
+         Rb = scale(Rb)) %>%
+  ungroup() 
+
+A <- select(B, metals)
+A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
+
+set.seed(888)
+m1 <- Rtsne(A, dim = 2,
+            perplexity = 7,
+            max_iter = 10000, 
+            theta = 0.05)
+
+# make a data frame that assigns an attribute one 
+# column/taxa at a time
+foo <- function(x){
+  g <- as.matrix(B[, x])
+  B %>% mutate(attr = g,
+               Metal = x,
+                    y1 = m1$Y[, 1],
+                    y2 = m1$Y[, 2])
+  
+}
+
+k <- lapply(metals, foo)
+k <- dplyr::bind_rows(k)
+
+p1 <- ggplot(k, aes(x = y1, y = y2, colour = strain, size = attr, alpha = col, frame = Metal, scale = 1.5)) +
+  geom_point() +
+  scale_colour_manual(values = pal[c(3, 5)]) +
+  theme_minimal()
+
+plotly::ggplotly(p1)
+
+```
+
+  
+```{r echo = TRUE}
+set.seed(42)
 
 B <- filter(df) %>%
   group_by(region, age) %>%
   mutate(Na = scale(Na),
          Mg = scale(Mg),
          Al = scale(Al),
-         K = scale(K),
+         K = scale(K), 
          Ca = scale(Ca),
          Mn = scale(Mn),
          Fe = scale(Fe),
@@ -108,31 +162,32 @@ A <- select(B, metals)
 A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
 
 
-m1 <- Rtsne(A, dim = 2, perplexity = 15, max_iter = 6000, theta = 0.1)
+# sort metals using Classical Multidimensional Scaling
+D <- dist(A, method = "euclidean")
+m3 <- cmdscale(D, k = 1)
 
-B$y1 <- m1$Y[, 1]
-B$y2 <- m1$Y[, 2]
+tD <- dist(t(A), method = "euclidean")
+m4 <- cmdscale(tD, k = 1)
 
-# make a data frame that colours points one column/genera at a time
-foo <- function(x){
-  B %>% mutate(col = B[,x],
-               Metal = x,
-                    Y1 = m1$Y[, 1],
-                    Y2 = m1$Y[, 2])
-  
-}
+# arrange samples and taxa by ordination above
+B1 <- data.frame(B,
+                 m3.Y = m3[,1]) %>%
+  arrange(strain) %>%  # arrange samples
+  mutate(sample = factor(sample, sample)) %>%
+  reshape2::melt(id.vars = c("id", "age", "strain", "region", "sample", "m3.Y"))
 
-k <- lapply(metals, foo)
-k <- dplyr::bind_rows(k)
+mets <- tibble::rownames_to_column(data.frame(m4)) %>% arrange(m4)
+B1$variable <- factor(B1$variable, mets$rowname)
 
-ggplot(B, aes(x = y1, y = y2, colour = strain, alpha = .9, size = Al)) +
-  geom_point() +
-  scale_colour_manual(values = pal[c(3, 5)]) +
-  theme_minimal()
-
-```
-
-```{r}
-
+# plot a heatmap
+ggplot(B1, aes(x = variable, y = sample,
+               fill = value)) +
+  geom_tile() +
+  scico::scale_fill_scico(palette = "vik", name = "Abundance (z)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 6),
+        axis.text.y = element_text(size = 6, colour = B1$strain)) +
+  ylab("Sample (red NFL-KO, black WT)") +
+  xlab("Metal")
 
 ```
