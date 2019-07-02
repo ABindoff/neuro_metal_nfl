@@ -1,0 +1,138 @@
+---
+title: "Metal clustering"
+author: "Bindoff, A."
+output: html_document
+---
+
+`r Sys.time()`
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load, message = F, warning = F}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(latex2exp)
+library(Rtsne)
+library(vegan)
+mciMean <- function(x){
+  return(setNames(c(round(mean(x), 3), round(ciMean(x), 3)), c("mean", "lwr", "upr")))
+}
+
+
+df <- read_csv("neuro_metal_nfl.csv", trim_ws = T)
+names(df) <- gsub("\\b\\d+\\b", "", names(df)) # remove numbers
+names(df) <- gsub("  ", "", names(df)) # remove extraneous blanks
+names(df)[1:6] <- c("id", "age", "strain", "region", "sample", "dilution")
+df$region[df$region == "Siatic nerve"] <- "Sciatic nerve"
+df$id <- factor(df$id)
+df$age <- factor(df$age)
+df$strain <- gsub("[[:punct:]]", "", df$strain)
+df$strain <- gsub("^WT AP.*", "WT_APPPS1", as.character(df$strain))
+df$strain <- factor(df$strain)
+df$region <- factor(df$region)
+
+df <- dplyr::select(df, c(1,2,3,4,5,9,10,11,13,14,17,18,21,22,23,24)) %>%# remove metals at or below detection limit
+    filter(strain == "WT" | strain == "NFL", age == 5 | age == 22) %>% filter(id != 15) # nfl id == 15 was 19mo
+df$strain <- factor(df$strain, levels = c("WT", "NFL"), labels = c("WT", "NFL-KO"))
+df$age <- factor(df$age, levels = c(5, 22))
+df <- na.omit(df)
+df$Cu[df$Cu >= 320] <- NA 
+
+
+`%nin%` <- Negate(`%in%`)
+
+df <- dplyr::filter(df, id %nin% c("238", "3183", "161470"))
+
+pal <- scico::scico(n = 6, palette = 'batlow')
+
+```
+
+tSNE 'discovers' clusters which clearly delineate into brain regions when metals are scaled irrespective of region or age.  
+
+```{r}
+A <- sapply(6:16, function(x) scale(df[, x]))
+A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
+
+m1 <- Rtsne(A, dim = 2, perplexity = 10, max_iter = 6000, theta = 0.1)
+
+d <- data.frame(y1 = m1$Y[, 1], 
+                y2 = m1$Y[, 2],
+                strain = df$strain,
+                id = df$id,
+                region = df$region,
+                age = df$age,
+                strain = df$strain)
+
+ggplot(d, aes(x = y1, y = y2, colour = region)) +
+  geom_point() +
+  scico::scale_color_scico_d(palette = "batlow") +
+  theme_minimal()
+
+```
+
+Clusters start to form around regions when data are grouped by region and age then scaled.  
+
+```{r}
+metals <- c("Na",
+            "Mg",
+            "Al",
+            "K",
+            "Ca",
+            "Mn",
+            "Fe",
+            "Cu",
+            "Zn",
+            "Se",
+            "Rb")
+
+B <- filter(df) %>%
+  group_by(region, age) %>%
+  mutate(Na = scale(Na),
+         Mg = scale(Mg),
+         Al = scale(Al),
+         K = scale(K),
+         Ca = scale(Ca),
+         Mn = scale(Mn),
+         Fe = scale(Fe),
+         Cu = scale(Cu),
+         Zn = scale(Zn),
+         Se = scale(Se),
+         Rb = scale(Rb)) %>%
+  ungroup() 
+
+A <- select(B, metals)
+A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
+
+
+m1 <- Rtsne(A, dim = 2, perplexity = 15, max_iter = 6000, theta = 0.1)
+
+B$y1 <- m1$Y[, 1]
+B$y2 <- m1$Y[, 2]
+
+# make a data frame that colours points one column/genera at a time
+foo <- function(x){
+  B %>% mutate(col = B[,x],
+               Metal = x,
+                    Y1 = m1$Y[, 1],
+                    Y2 = m1$Y[, 2])
+  
+}
+
+k <- lapply(metals, foo)
+k <- dplyr::bind_rows(k)
+
+ggplot(B, aes(x = y1, y = y2, colour = strain, alpha = .9, size = Al)) +
+  geom_point() +
+  scale_colour_manual(values = pal[c(3, 5)]) +
+  theme_minimal()
+
+```
+
+```{r}
+
+
+```
