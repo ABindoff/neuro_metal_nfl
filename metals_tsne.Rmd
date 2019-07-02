@@ -73,7 +73,7 @@ B <- filter(df) %>%
          Rb = scale(Rb)) %>%
   ungroup() 
 
-A <- select(B, metals)
+A <- select(B, Na, Mg, Al, K, Ca, Mn, Fe, Cu, Zn, Se, Rb)
 A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
 
 
