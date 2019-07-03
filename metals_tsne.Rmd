@@ -53,7 +53,7 @@ pal <- scico::scico(n = 6, palette = 'batlow')
 
 ## Heatmap
 
-Metal concentrations are standardized across region and age. Metals are ordinated by similarity of composition.  
+Metal concentrations are standardized across region and age. Metals are ordinated by (statistical) similarity of composition.  
 
 ```{r echo = TRUE}
 set.seed(42)
@@ -107,7 +107,9 @@ ggplot(B1, aes(x = variable, y = sample,
 
 ```
 
-tSNE 'discovers' clusters which clearly delineate into brain regions when metals are scaled irrespective of region or age.  
+## Clustering
+
+A stochastic neighbour embedding algorithm (tSNE) was fitted using data on metal composition for each sample. The algorithm was given no information on region, age, or genotype. Each datapoint represents a sample. Objects (datapoints) that are similar in high-dimensional space (the dimensions are the metals in this example) cluster together in low-dimensional space. There are no surprises here, the clusters clearly delineate into brain regions. I present this as a 'proof-of-concept' and to aid in understanding what tSNE can show us.  
 
 ```{r}
 set.seed(77)
@@ -127,12 +129,12 @@ d <- data.frame(y1 = m1$Y[, 1],
 ggplot(d, aes(x = y1, y = y2, colour = region)) +
   geom_point(size = 1.5, alpha = 0.9) +
   geom_point(size = 4, alpha = 0.2) +
-  scico::scale_color_scico_d(palette = "batlow") +
+  scico::scale_color_scico_d(palette = "batlow", end = 0.9) +
   theme_minimal()
 
 ```
 
-Clusters start to form around genotypes when data are grouped by region and age then scaled. Size and transparency are varied according to standardized metal concentration. For a strong contrast, compare Rb with Fe.  
+Clusters start to form around genotypes when the effects of region and age are partialled out. Size and transparency are varied according to standardized metal concentration. For a strong contrast, compare Rb with Fe by clicking on the interactive scale at the bottom of the plot. Clicking on `Play` will produce an animation. The metals have been ordered by similarity of composition within the sample, for example Zn and Ca covary more than Ca and Rb.  
 
 ```{r}
 metals <- mets$rowname
@@ -163,12 +165,15 @@ k$Metal <- factor(k$Metal, metals)
 
 p1 <- ggplot(k, aes(x = y1, y = y2, colour = strain, size = att, alpha = att, frame = Metal, scale = 1.5)) +
   geom_point() +
-  geom_point(size = .5, alpha = .8) +
+  geom_point(size = .5, alpha = .8, show.legend = FALSE) +
   scale_colour_manual(values = pal[c(2, 4)]) +
   theme_minimal()
+
+#plotly::plotly_json(p1)
 
 plotly::ggplotly(p1)
 
 ```
 
   
+There was only minimal data-cleaning and transformation, but if these results are interesting I could produce a more thorough analysis.  
