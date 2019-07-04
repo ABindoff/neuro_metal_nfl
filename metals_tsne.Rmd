@@ -53,28 +53,30 @@ pal <- scico::scico(n = 6, palette = 'batlow')
 
 ## Heatmap
 
-Metal concentrations are standardized across region and age. Metals are ordinated by (statistical) similarity of composition.  
+Metal concentrations are standardized across region and age using a centered log-ration transformation (Aitchison, J. 1986). Metals are ordinated by (statistical) similarity of composition. 
 
 ```{r echo = TRUE}
 set.seed(42)
 
+library(compositions)
+
 B <- filter(df) %>%
   group_by(region, age) %>%
-  mutate(Na = scale(Na),
-         Mg = scale(Mg),
-         Al = scale(Al),
-         K = scale(K), 
-         Ca = scale(log(Ca)),
-         Mn = scale(Mn),
-         Fe = scale(Fe),
-         Cu = scale(Cu),
-         Zn = scale(Zn),
-         Se = scale(Se),
-         Rb = scale(Rb)) %>%
+  mutate(Na = clr(Na),
+         Mg = clr(Mg),
+         Al = clr(Al),
+         K =  clr(K), 
+         Ca = clr(log(Ca)),
+         Mn = clr(Mn),
+         Fe = clr(Fe),
+         Cu = clr(Cu),
+         Zn = clr(Zn),
+         Se = clr(Se),
+         Rb = clr(Rb)) %>%
   ungroup() 
 
 A <- select(B, Na, Mg, Al, K, Ca, Mn, Fe, Cu, Zn, Se, Rb)
-A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
+#A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
 
 
 # sort metals using Classical Multidimensional Scaling
@@ -98,14 +100,17 @@ B1$variable <- factor(B1$variable, mets$rowname)
 ggplot(B1, aes(x = variable, y = sample,
                fill = value)) +
   geom_tile() +
-  scico::scale_fill_scico(palette = "vik", name = "Abundance (z)") +
+  scico::scale_fill_scico(palette = "vik", name = "Abundance (clr)") +
   theme_minimal() +
   theme(axis.text.x = element_text(size = 6),
         axis.text.y = element_text(size = 6, colour = B1$strain)) +
-  ylab("Sample (red NFL-KO, black WT)") +
+  ylab("Sample (black WT, red NFL-KO)") +
   xlab("Metal")
 
+
+metals <- mets$rowname
 ```
+
 
 ## Clustering
 
@@ -113,6 +118,7 @@ A stochastic neighbour embedding algorithm (tSNE) was fitted using data on metal
 
 ```{r}
 set.seed(77)
+
 A <- sapply(6:16, function(x) scale(df[, x]))
 A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
 
@@ -137,16 +143,141 @@ ggplot(d, aes(x = y1, y = y2, colour = region)) +
 Clusters start to form around genotypes when the effects of region and age are partialled out. Size and transparency are varied according to standardized metal concentration. For a strong contrast, compare Rb with Fe by clicking on the interactive scale at the bottom of the plot. Clicking on `Play` will produce an animation. The metals have been ordered by similarity of composition within the sample, for example Zn and Ca covary more than Ca and Rb.  
 
 ```{r}
-metals <- mets$rowname
 
-A <- select(B, metals)
+B <- filter(df) %>%
+  group_by(region, age) %>%
+  mutate(Na = scale(Na),
+         Mg = scale(Mg),
+         Al = scale(Al),
+         K =  scale(K), 
+         Ca = scale(log(Ca)),
+         Mn = scale(Mn),
+         Fe = scale(Fe),
+         Cu = scale(Cu),
+         Zn = scale(Zn),
+         Se = scale(Se),
+         Rb = scale(Rb)) %>%
+  ungroup() %>%
+  arrange(sample)
+
+A <- select(B, Rb, Se, K, Na, Cu, Fe, Mn, Al)#metals)
 A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
+
+#A <- select(B, Al, Fe, Zn, Rb)
+
 
 set.seed(888)
 m1 <- Rtsne(A, dim = 2,
             perplexity = 7,
             max_iter = 10000, 
             theta = 0.05)
+
+# make a data frame that assigns an attribute one 
+# column/taxa at a time
+foo <- function(x){
+  g <- as.matrix(B[, x])
+  B %>% mutate(att = g,
+               Metal = x,
+                    y1 = m1$Y[, 1],
+                    y2 = m1$Y[, 2])
+  
+}
+
+k <- lapply(metals, foo)
+k <- dplyr::bind_rows(k)
+k$Metal <- factor(k$Metal, rev(metals))
+
+p1 <- ggplot(k, aes(x = y1, y = y2, colour = strain, size = att, alpha = att, frame = Metal, scale = 1.5, z = age)) +
+  geom_point() +
+  geom_point(size = .5, alpha = .8, show.legend = FALSE) +
+  scale_colour_manual(values = pal[c(2, 4)]) +
+  theme_minimal()
+
+#plotly::plotly_json(p1)
+
+plotly::ggplotly(p1)
+
+```
+
+
+```{r eval = FALSE}
+set.seed(888)
+
+# fit 10 models, pick the one with lowest KL divergence
+ms <- lapply(1:10, function(x) Rtsne(A, dim = 2,
+            perplexity = 7,
+            max_iter = 10000, 
+            theta = 0.05))
+
+last_itercosts <- function(x){
+  x$itercosts[length(x$itercosts)]
+}
+
+m1 <- ms[[which.min(lapply(ms, last_itercosts))]]
+
+# make a data frame that assigns an attribute one 
+# column/taxa at a time
+foo <- function(x){
+  g <- as.matrix(B[, x])
+  B %>% mutate(att = g,
+               Metal = x,
+                    y1 = m1$Y[, 1],
+                    y2 = m1$Y[, 2])
+  
+}
+
+k <- lapply(metals, foo)
+k <- dplyr::bind_rows(k)
+k$Metal <- factor(k$Metal, rev(metals))
+
+p1 <- ggplot(k, aes(x = y1, y = y2, colour = strain, size = att, alpha = att, frame = Metal, scale = 1.5)) +
+  geom_point() +
+  geom_point(size = .5, alpha = .8, show.legend = FALSE) +
+  scale_colour_manual(values = pal[c(2, 4)]) +
+  theme_minimal()
+
+#plotly::plotly_json(p1)
+
+plotly::ggplotly(p1)
+```
+
+
+
+```{r eval = FALSE}
+
+B <- filter(df) %>%
+  group_by(region, age) %>%
+  mutate(Na = scale(as.vector(clr(Na))),
+         Mg = scale(as.vector(clr(Mg))),
+         Al = scale(as.vector(clr(Al))),
+         K =  scale(as.vector(clr(K))), 
+         Ca = scale(as.vector(clr(Ca))),
+         Mn = scale(as.vector(clr(Mn))),
+         Fe = scale(as.vector(clr(Fe))),
+         Cu = scale(as.vector(clr(Cu))),
+         Zn = scale(as.vector(clr(Zn))),
+         Se = scale(as.vector(clr(Se))),
+         Rb = scale(as.vector(clr(Rb)))) %>%
+  ungroup()
+
+A <- select(B, metals)
+A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
+
+
+set.seed(888)
+
+
+ms <- lapply(1:10, function(x) Rtsne(A, dim = 2,
+            perplexity = 7,
+            max_iter = 10000, 
+            theta = 0.05))
+last_itercosts <- function(x){
+  x$itercosts[length(x$itercosts)]
+}
+
+lapply(ms, last_itercosts)
+
+m1 <- ms[[which.min(lapply(ms, last_itercosts))]]
 
 # make a data frame that assigns an attribute one 
 # column/taxa at a time
@@ -175,5 +306,145 @@ plotly::ggplotly(p1)
 
 ```
 
+## Hierarchical tSNE
+
+I believe this to be a novel approach to hierarchical tSNE. A mixed model is used to estimate the population level effects, then conditional estimates are 'shrunk' towards the population mean using the random effects structure.  
+
+```{r}
+B <- df %>%
+  group_by(region, age) %>%
+  mutate(Na = scale(Na),
+         Mg = scale(Mg),
+         Al = scale(Al),
+         K =  scale(K), 
+         Ca = scale(Ca),
+         Mn = scale(Mn),
+         Fe = scale(Fe),
+         Cu = scale(Cu),
+         Zn = scale(Zn),
+         Se = scale(Se),
+         Rb = scale(Rb)) %>%
+  ungroup() %>%
+  arrange(sample)
+
+
+
+tB <- reshape2::melt(B, id.vars = c("id", "age", "strain", "region", "sample"))
+names(tB) <- c("id", "age", "strain", "region", "sample", "metal", "conc")
+tB$conc[is.na(tB$conc)] <- 0
+```
+
+```{r}
+
+lm1 <- glmmTMB::glmmTMB(conc ~ metal*region*age*strain + (metal|id/region), tB)
+
+tB$fit <- predict(lm1, tB)
+
+ggplot(tB, aes(x = conc, y = fit, colour = region)) +
+  facet_wrap(~metal, scales = "free") +
+  geom_abline(linetype = "dashed") +
+  geom_point(alpha = 0.5) +
+  scale_colour_viridis_d()
+
+```
+
+```{r eval = FALSE}
+set.seed(1)
+ggplot(tB, aes(x = region, y = fit, colour = strain)) +
+  ggbeeswarm::geom_quasirandom(alpha = 0.6) +
+  facet_wrap(~metal, scales = "free_y")
+set.seed(1)
+ggplot(tB, aes(x = region, y = conc, colour = strain)) +
+  ggbeeswarm::geom_quasirandom(alpha = 0.6) +
+  facet_wrap(~metal, scales = "free_y")
+
+```
+
+```{r, eval = FALSE}
+A1 <- A
+A <- select(tB, sample, metal, conc) %>% 
+  tidyr::spread(metal, conc) %>%
+  arrange(sample) %>%
+  select(Rb, Se, K, Na, Cu, Fe, Mn, Al)
+A1-A  ## should be zero!
+```
+
+```{r}
+
+A <- select(tB, sample, metal, fit) %>% 
+  tidyr::spread(metal, fit) %>%
+  select(Rb, Se, K, Na, Cu, Fe, Mn, Al)
+
+set.seed(888)
+m1 <- Rtsne(A, dim = 2,
+            perplexity = 7,
+            max_iter = 10000, 
+            theta = 0.05)
+
+# make a data frame that assigns an attribute one 
+# column/taxa at a time
+foo <- function(x){
+  g <- as.matrix(B[, x])
+  B %>% mutate(att = g,
+               Metal = x,
+                    y1 = m1$Y[, 1],
+                    y2 = m1$Y[, 2])
   
-There was only minimal data-cleaning and transformation, but if these results are interesting I could produce a more thorough analysis.  
+}
+
+k <- lapply(metals, foo)
+k <- dplyr::bind_rows(k)
+k$Metal <- factor(k$Metal, rev(metals))
+
+p1 <- ggplot(k, aes(x = y1, y = y2, colour = strain, size = att, alpha = att, frame = Metal, scale = 1.5)) +
+  geom_point() +
+  geom_point(size = .5, alpha = .8, show.legend = FALSE) +
+  scale_colour_manual(values = pal[c(2, 4)]) +
+  theme_minimal()
+
+#plotly::plotly_json(p1)
+
+plotly::ggplotly(p1)
+
+```
+
+## Ordination
+
+Classical multi-dimensional (and non-metric, not shown) yield interpretable results, but the lack of clusters does not yield the same richness of information.  
+
+```{r}
+set.seed(888)
+m1 <- cmdscale(dist(A), k = 2)
+
+# make a data frame that assigns an attribute one 
+# column/taxa at a time
+foo <- function(x){
+  g <- as.matrix(B[, x])
+  B %>% mutate(att = g,
+               Metal = x,
+                    y1 = m1[, 1],
+                    y2 = m1[, 2])
+  
+}
+
+k <- lapply(metals, foo)
+k <- dplyr::bind_rows(k)
+k$Metal <- factor(k$Metal, rev(metals))
+
+p1 <- ggplot(k, aes(x = y1, y = y2, colour = strain, size = att, alpha = att, frame = Metal, scale = 1.5)) +
+  geom_point() +
+  geom_point(size = .5, alpha = .8, show.legend = FALSE) +
+  scale_colour_manual(values = pal[c(2, 4)]) +
+  theme_minimal()
+
+#plotly::plotly_json(p1)
+
+plotly::ggplotly(p1)
+
+```
+
+## Going wide
+
+Spreading the data in metal-brain-region columns may provide further richness
+
+
