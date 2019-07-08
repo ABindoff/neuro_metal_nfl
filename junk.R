@@ -7,7 +7,7 @@ d <- expand.grid(metal = c(-0.5,0,.5,1),
                  id = c("a", "b", "c", "d", "e", "f", "g","h","i","j","k", "aa", "bb", "cc", "dd", "ee", "ff", "gg","hh","ii","jj","kk"))
 d$group <- c(rep(0, 11*20), rep(1, 11*20))
 
-d$conc <- 0.3*d$metal -.9*d$region + 1.2*d$metal*d$region - .5*d$metal*d$region*d$group + rnorm(nrow(d), 3, 1)
+d$conc <- 0.3*d$metal -.9*d$region + 1.2*d$metal*d$region - 1.2*d$metal*d$group -1*d$region*d$group + rnorm(nrow(d), 3, 1)
 
 d <- d %>% mutate(ranef = rep(rnorm(22, 0, 2), each = 20),
                   conc = conc + ranef)
@@ -50,7 +50,7 @@ k <- lapply(metals, foo)
 k <- dplyr::bind_rows(k)
 k$Metal <- factor(k$Metal, levels = metals)
 
-p1 <- ggplot(k, aes(x = y1, y = y2, colour = region, size = att, alpha = att/2, frame = Metal, scale = 1.5)) +
+p1 <- ggplot(k, aes(x = y1, y = y2, colour = region, shape = factor(group), size = att, alpha = att/2, frame = Metal, scale = 1.5)) +
   geom_point() +
   geom_point(size = .5, alpha = .8, show.legend = FALSE) +
   theme_minimal()
@@ -80,7 +80,7 @@ k <- lapply(metals, foo)
 k <- dplyr::bind_rows(k)
 k$Metal <- factor(k$Metal, levels = metals)
 
-p2 <- ggplot(k, aes(x = y1, y = y2, colour = region, size = att, alpha = att/2, frame = Metal, scale = 1.5)) +
+p2 <- ggplot(k, aes(x = y1, y = y2, colour = region, size = att, shape = factor(group), alpha = att/2, frame = Metal, scale = 1.5)) +
   geom_point() +
   geom_point(size = .5, alpha = .8, show.legend = FALSE) +
   theme_minimal()
