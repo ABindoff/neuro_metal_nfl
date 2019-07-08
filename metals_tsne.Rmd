@@ -160,7 +160,7 @@ B <- filter(df) %>%
   ungroup() %>%
   arrange(sample)
 
-A <- select(B, Rb, Se, K, Na, Cu, Fe, Mn, Al)#metals)
+A <- select(B, Rb, Fe, Al)#metals)
 A[] <- apply(A, 2, function(x) ifelse(is.na(x), 0 , x))
 
 #A <- select(B, Al, Fe, Zn, Rb)
@@ -378,7 +378,7 @@ A <- select(tB, sample, metal, fit) %>%
 set.seed(888)
 m1 <- Rtsne(A, dim = 2,
             perplexity = 7,
-            max_iter = 10000, 
+            max_iter = 12000, 
             theta = 0.05)
 
 # make a data frame that assigns an attribute one 
