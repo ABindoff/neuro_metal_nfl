@@ -116,6 +116,32 @@ metals <- mets$rowname
 
 A stochastic neighbour embedding algorithm (tSNE) was fitted using data on metal composition for each sample. The algorithm was given no information on region, age, or genotype. Each datapoint represents a sample. Objects (datapoints) that are similar in high-dimensional space (the dimensions are the metals in this example) cluster together in low-dimensional space. There are no surprises here, the clusters clearly delineate into brain regions. I present this as a 'proof-of-concept' and to aid in understanding what tSNE can show us.  
 
+
+```{r}
+set.seed(321)
+p <- df %>% group_by(region) %>%
+  mutate(Al = scale(Al),
+         Rb = scale(Rb),
+         Zn = scale(Zn),
+         Fe = scale(Fe),
+         Se = scale(Se)) %>%
+  ungroup() %>%
+  select_split(Al, Zn, Fe, Rb, Se) %>%
+  tsner(perplexity = 10, max_iter = 2000) %>%
+  plotr() %>%
+  order_taxa() %>%
+  ggplot(aes(x = y1, y = y2, colour = strain, size = att, alpha = att, frame = taxa)) +
+  geom_point() +
+  theme_minimal()
+  
+plotly::ggplotly(p)
+
+
+
+
+```
+
+
 ```{r}
 set.seed(77)
 
