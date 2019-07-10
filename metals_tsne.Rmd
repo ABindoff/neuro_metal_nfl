@@ -116,18 +116,98 @@ metals <- mets$rowname
 
 A stochastic neighbour embedding algorithm (tSNE) was fitted using data on metal composition for each sample. The algorithm was given no information on region, age, or genotype. Each datapoint represents a sample. Objects (datapoints) that are similar in high-dimensional space (the dimensions are the metals in this example) cluster together in low-dimensional space. There are no surprises here, the clusters clearly delineate into brain regions. I present this as a 'proof-of-concept' and to aid in understanding what tSNE can show us.  
 
+```{r}
+# this doesn't really work (better to separate into age groups)
+
+set.seed(77)
+p <- df %>%
+  mutate(Zn = log(Zn),
+         Al = log(Al)) %>%
+  mutate(age_c = factor(age, labels = c("old", "young"))) %>%
+  select(age_c, age, Al, K, Fe, Cu, Zn, Se, Rb, id, strain, region) %>%   # need to take sample column out
+   superwide(age_c, c(Al,
+              K,
+              Fe,
+              Cu,
+              Zn,
+              Se,
+              Rb)) %>%
+  scale_these(ends_with("Al"),
+              ends_with("K"),
+              ends_with("Fe"),
+              ends_with("Cu"),
+              ends_with("Zn"),
+              ends_with("Se"),
+              ends_with("Rb")) %>%
+  select_split(ends_with("Al"),
+              ends_with("K"),
+              ends_with("Fe"),
+              ends_with("Cu"),
+              ends_with("Zn"),
+              ends_with("Se"),
+              ends_with("Rb")) %>%
+  tsner(perplexity = 10, max_iter = 6000, theta = 0.1) %>%
+  plotr() %>%
+  order_taxa() %>%
+  ggplot(aes(x = y1, y = y2, colour = age, size = att, alpha = att, frame = taxa)) +
+  geom_point() +
+  geom_point(size = 0.5, alpha = 0.8) +
+  scico::scale_color_scico_d(palette = "batlow", end = 0.9) +
+  theme_minimal()
+  
+plotly::ggplotly(p)
+
+```
+
+```{r}
+set.seed(88)
+q <- df %>%
+  mutate(Zn = log(Zn),
+         Al = log(Al)) %>%
+  scale_these(Al, K, Fe, Cu, Zn, Se, Rb) %>%
+  select_split(Al, K, Fe, Cu, Zn, Se, Rb) %>%
+  tsner(perplexity = 10, max_iter = 6000, theta = 0.1) %>%
+  plotr() %>%
+  order_taxa()
+
+p <-   ggplot(q, aes(x = y1, y = y2, colour = region, size = att, alpha = att, frame = taxa)) +
+  geom_point() +
+  geom_point(size = 1, alpha = 0.8, colour = "grey45", aes(shape = age)) +
+  scico::scale_color_scico_d(palette = "batlow", end = 0.9) +
+  theme_minimal()
+  
+plotly::ggplotly(p)
+
+```
+
 
 ```{r}
 set.seed(321)
 p <- df %>% group_by(region) %>%
-  mutate(Al = scale(Al),
-         Rb = scale(Rb),
-         Zn = scale(Zn),
-         Fe = scale(Fe),
-         Se = scale(Se)) %>%
+  scale_these(Al, Rb, Zn, Fe, Se) %>%
   ungroup() %>%
   select_split(Al, Zn, Fe, Rb, Se) %>%
   tsner(perplexity = 10, max_iter = 2000) %>%
+  plotr() %>%
+  order_taxa() %>%
+  ggplot(aes(x = y1, y = y2, colour = strain, size = att, alpha = att, frame = taxa)) +
+  geom_point() +
+  theme_minimal()
+  
+plotly::ggplotly(p)
+
+
+
+
+```
+
+```{r}
+set.seed(123)
+p <- df %>% select(region, strain, age, id, Al, Rb, Zn, Fe, Se, Cu) %>%
+  superwide(region, c(Al, Rb, Zn, Fe, Se, Cu)) %>%
+  scale_these(ends_with("Al"), ends_with("Rb"), ends_with("Zn"), ends_with("Fe"), ends_with("Se"), ends_with("Cu")) %>%
+  select_split(ends_with("Al"), ends_with("Rb"), ends_with("Zn"), ends_with("Fe"), ends_with("Se"), ends_with("Cu")) %>%
+  tsner(perplexity = 5, max_iter = 5000) %>%
   plotr() %>%
   order_taxa() %>%
   ggplot(aes(x = y1, y = y2, colour = strain, size = att, alpha = att, frame = taxa)) +

@@ -63,16 +63,29 @@ order_taxa <- function(x, ...){
   y <- reshape2::melt(x[, c(unique(x$taxa), "y1")], id.vars = c("y1")) %>%
     mutate(z = y1*value) %>%
     group_by(variable) %>%
-    summarise(z.m = median(z)) %>%
+    summarise(z.m = mean(z, na.rm = TRUE)) %>%
     arrange(z.m)
   x %>% mutate(taxa = factor(taxa, y$variable))
 }
 
-x <- reshape2::melt(data.frame(p), id.vars = c("group", "region", "id", "y1", "y2")) %>%
-  mutate(z = y1*value) %>%
-  group_by(variable) %>%
-  summarise(z.m = mean(z)) %>%
-  arrange(z.m)
+
+
+superwide <- function(df, key, value) {
+  # quote key
+  keyq <- rlang::enquo(key)
+  # break value vector into quotes
+  valueq <- rlang::enquo(value)
+  s <- rlang::quos(!!valueq)
+  df <- df %>% gather(variable, value, !!!s) %>%
+    unite(temp, !!keyq, variable) %>%
+    spread(temp, value)
+}
+
+scale_these <- function(x, ...){
+  cols <- rlang::enquos(...)
+  x %>% mutate_at(cols, scale)
+}
+
 
 
 
@@ -108,7 +121,7 @@ d <- d %>%
 
 set.seed(321)
 p <- select(d, group, metal, region, fconc, id) %>% 
-  tidyr::spread(metal, fconc) %>%
+  spread(metal, fconc) %>%
   group_by(region) %>%
   mutate(Al = scale(Al),
          Rb = scale(Rb),
@@ -125,4 +138,17 @@ p <- select(d, group, metal, region, fconc, id) %>%
   
 plotly::ggplotly(p)
 
+set.seed(456)
+p <- select(d, group, metal, region, fconc, id) %>% 
+  spread(metal, fconc) %>%
+  superwide(region, c(Al, Zn, Fe, Rb)) %>%
+  scale_these(-c(1,2)) %>%
+  select_split(-c(1,2)) %>%
+  tsner(perplexity = 5, max_iter = 2000) %>%
+  plotr() %>%
+  order_taxa() %>%
+  ggplot(aes(x = y1, y = y2, colour = factor(group), size = att, alpha = att, frame = taxa)) +
+  geom_point() +
+  theme_minimal()
 
+plotly::ggplotly(p)
