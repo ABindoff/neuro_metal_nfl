@@ -1,6 +1,12 @@
 
 select_split <- function(x, ...){
   y <- enquos(...)
+  r1 <- nrow(x)
+  x <- tidyr::drop_na(x, !!!y)
+  r2 <- nrow(x)
+  if(r1 != r2){
+    warning(cat("\n", r1, "rows before this operation, but", r1-r2, "rows removed due to missing values in selected columns.\n"))
+  }
   a <- x %>% select(!!!y) 
   class(a) <- c("tsner_matrix", "data.frame", "tbl", "tbl_df")
   b <- x %>% select(-c(!!!y)) 
@@ -8,13 +14,22 @@ select_split <- function(x, ...){
   list(a, b)
 }
 
-is.tsner_matrix <- function(x){
-  "tsner_matrix" %in% class(x[[1]])
-}
-
-is.tsner_fit <- function(x){
-  "tsner_fit" %in% class(x)
-}
+# select_split <- function(x, ...){
+#   y <- enquos(...)
+#   a <- x %>% select(!!!y) 
+#   class(a) <- c("tsner_matrix", "data.frame", "tbl", "tbl_df")
+#   b <- x %>% select(-c(!!!y)) 
+#   class(b) <- c("tsner_grouping", "data.frame", "tbl", "tbl_df")
+#   list(a, b)
+# }
+# 
+# is.tsner_matrix <- function(x){
+#   "tsner_matrix" %in% class(x[[1]])
+# }
+# 
+# is.tsner_fit <- function(x){
+#   "tsner_fit" %in% class(x)
+# }
 
 
 tsner <- function(x, ...){
@@ -52,6 +67,7 @@ plotr <- function(x, ...){
     stop("\nObject to plotr is not a valid tsner_fit\nPlease use tsner to embed\n")
   }
   j <- attributes(x)$cols
+  j <- gsub(" ", ".", j)
   k <- lapply(j, function(z) plotr.foo(z, data.frame(x)))
   k <- bind_rows(k)
   class(k) <- c("data.frame", "tbl", "tbl_df", "tsner_plot_layers")
@@ -81,9 +97,16 @@ superwide <- function(df, key, value) {
     spread(temp, value)
 }
 
+na2zero <- function(x){
+  x[is.na(x)] <- 0
+  x
+}
+
 scale_these <- function(x, ...){
   cols <- rlang::enquos(...)
-  x %>% mutate_at(cols, scale)
+  x %>% mutate_at(cols, scale) %>%
+    #mutate_at(cols, na2zero) %>%
+    mutate_at(cols, c)
 }
 
 
@@ -123,16 +146,13 @@ set.seed(321)
 p <- select(d, group, metal, region, fconc, id) %>% 
   spread(metal, fconc) %>%
   group_by(region) %>%
-  mutate(Al = scale(Al),
-         Rb = scale(Rb),
-         Zn = scale(Zn),
-         Fe = scale(Fe)) %>%
+  scale_these(Al, Zn, Fe, Rb) %>%
   ungroup() %>%
   select_split(Al, Zn, Fe, Rb) %>%
   tsner(perplexity = 10, max_iter = 2000) %>%
   plotr() %>%
   order_taxa() %>%
-  ggplot(aes(x = y1, y = y2, colour = factor(group), size = att, alpha = att, frame = taxa)) +
+  ggplot(aes(x = y1, y = y2, colour = factor(group), size = att, alpha = att, frame = taxa, region = region)) +
   geom_point() +
   theme_minimal()
   
