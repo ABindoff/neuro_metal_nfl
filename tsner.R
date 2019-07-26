@@ -23,13 +23,13 @@ select_split <- function(x, ...){
 #   list(a, b)
 # }
 # 
-# is.tsner_matrix <- function(x){
-#   "tsner_matrix" %in% class(x[[1]])
-# }
-# 
-# is.tsner_fit <- function(x){
-#   "tsner_fit" %in% class(x)
-# }
+is.tsner_matrix <- function(x){
+  "tsner_matrix" %in% class(x[[1]])
+}
+
+is.tsner_fit <- function(x){
+  "tsner_fit" %in% class(x)
+}
 
 
 tsner <- function(x, ...){
@@ -52,6 +52,14 @@ tsner <- function(x, ...){
   class(y) <- c("tsner_fit", "list")
   y
 }
+
+clustr <- function(x, ...){
+  require(mclust)
+  mc <- Mclust(x[[1]])
+  x[[2]]$mc <- predict(mc, x[[1]])$classification
+  x
+}
+
 
 plotr.foo <- function(g, x, ...){
   y <- as.matrix(x[, g])
@@ -113,6 +121,8 @@ scale_these <- function(x, ...){
 
 
 library(Rtsne)
+library(dplyr)
+library(ggplot2)
 set.seed(123)
 d <- expand.grid(metal = c(-0.5,-0.4,.5,1),
                  region = c(-1.1,-1,0,1.5,2.2),
@@ -144,7 +154,7 @@ d <- d %>%
 
 set.seed(321)
 p <- select(d, group, metal, region, fconc, id) %>% 
-  spread(metal, fconc) %>%
+  tidyr::spread(metal, fconc) %>%
   group_by(region) %>%
   scale_these(Al, Zn, Fe, Rb) %>%
   ungroup() %>%
@@ -172,3 +182,26 @@ p <- select(d, group, metal, region, fconc, id) %>%
   theme_minimal()
 
 plotly::ggplotly(p)
+
+p <- select(d, group, metal, region, fconc, id) %>% 
+  tidyr::spread(metal, fconc) %>%
+  group_by(region) %>%
+  scale_these(Al, Zn, Fe, Rb) %>%
+  ungroup() %>%
+  select_split(Al, Zn, Fe, Rb) %>%
+  clustr() %>%
+  tsner(perplexity = 9, max_iter = 2000)
+
+p0 <- p %>%
+  plotr() %>%
+  order_taxa() %>%
+  ggplot(aes(x = y1, y = y2, colour = factor(group), shape = factor(mc), size = att, alpha = att, frame = taxa)) +
+  geom_point() +
+  theme_minimal()
+  
+plotly::ggplotly(p0)
+
+
+library(mclust)
+mc <-  Mclust(p[[1]], G = 1:5)
+
